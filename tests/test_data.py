@@ -16,14 +16,14 @@ SPEC.loader.exec_module(data)
 def fixture():
     return {
         "价格发行与成交": [
-            data.PRICE_HEADERS,
+            data.PRICE_HEADERS.copy(),
             ["1", "3", "1", "2", "4"],
             ["1.1", "5", "2", "3", "6"],
             ["已挂 / 成交合计", "8", "3", "5", "10"],
             ["Source price note"],
         ],
         "每日K线": [
-            data.DAILY_HEADERS,
+            data.DAILY_HEADERS.copy(),
             ["第1年 01月01日", "1.1", "10", "1", "1.1", "1", "10.6", "2", "实际成交"],
             ["第1年 01月02日", "1.1", "0", "1.1", "1.1", "1.1", "0", "0", "无成交，沿用前收盘"],
             ["全程成交合计", "", "10", "", "", "", "10.6", "2"],
@@ -38,6 +38,34 @@ class DataTests(unittest.TestCase):
         self.assertEqual(result["prices"][0], {"price": Decimal("1"), "issued": Decimal("3"), "priceHighIssued": Decimal("1"), "volumeHighIssued": Decimal("2"), "volume": Decimal("4")})
         self.assertEqual(len(result["prices"]), 2)
         self.assertEqual(result["meta"]["sourceNotes"]["prices"], ["Source price note"])
+        self.assertEqual(result["meta"]["issuanceBasis"], "actual-order-price")
+        self.assertIn("实际挂单价", result["meta"]["issuanceDescription"])
+
+    def test_accepts_batch_issuance_schema_and_preserves_its_meaning(self):
+        sheets = fixture()
+        sheets["价格发行与成交"][0][1] = "发行量（整批）\nYDA"
+        sheets["价格发行与成交"][3][0] = "发行 / 成交合计"
+        result = data.parse_data(sheets)
+        self.assertEqual(result["meta"]["issuanceBasis"], "batch-primary-price")
+        self.assertIn("主发行价", result["meta"]["issuanceDescription"])
+        self.assertIn("待挂", result["meta"]["issuanceDescription"])
+        self.assertEqual(result["prices"][0]["issued"], Decimal("3"))
+        self.assertEqual(result["meta"]["sourceNotes"]["prices"], ["Source price note"])
+
+    def test_rejects_mismatched_issuance_header_and_total_label(self):
+        for header, total in (("发行量（已挂）YDA", "发行 / 成交合计"), ("发行量（整批）YDA", "已挂 / 成交合计")):
+            with self.subTest(header=header):
+                sheets = fixture()
+                sheets["价格发行与成交"][0][1] = header
+                sheets["价格发行与成交"][3][0] = total
+                with self.assertRaisesRegex(data.DataError, "does not match issuance header"):
+                    data.parse_data(sheets)
+
+    def test_rejects_unknown_issuance_schema(self):
+        sheets = fixture()
+        sheets["价格发行与成交"][0][1] = "发行量YDA"
+        with self.assertRaisesRegex(data.DataError, "Unexpected column headers"):
+            data.parse_data(sheets)
 
     def test_ohlc_mapping_and_no_trade_days(self):
         result = data.parse_data(fixture())

@@ -53,6 +53,7 @@
     $('day-count').textContent = `${number(volume)} YDA · ${number(daily.length, 0)} 天`;
     $('total-issued').textContent = compact(issued);
     $('price-count').textContent = `${number(issued)} YDA · ${prices.length} 个价格档位`;
+    if (state.data.meta?.issuanceDescription) $('issuance-basis').textContent = state.data.meta.issuanceDescription;
   }
 
   function renderPriceChart() {

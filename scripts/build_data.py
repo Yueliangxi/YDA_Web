@@ -28,6 +28,18 @@ PACKAGE_REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
 DATE_PATTERN = re.compile(r"第(\d+)年\s+(\d{1,2})月(\d{1,2})日")
 PRICE_HEADERS = ["价格HK/YDA", "发行量（已挂）YDA", "价格新高发行YDA", "成交量新高发行YDA", "成交量YDA"]
 DAILY_HEADERS = ["模拟日期（UTC）", "价格（收盘）HK/YDA", "成交量YDA", "开盘价HK/YDA", "最高价HK/YDA", "最低价HK/YDA", "成交额HK", "成交笔数", "状态"]
+PRICE_SCHEMAS = {
+    "发行量（已挂）YDA": {
+        "totalLabel": "已挂 / 成交合计",
+        "basis": "actual-order-price",
+        "description": "发行量按实际挂单价归集（含预挂），实际成交量按真实成交价统计。",
+    },
+    "发行量（整批）YDA": {
+        "totalLabel": "发行 / 成交合计",
+        "basis": "batch-primary-price",
+        "description": "整批发行量归入主发行价（含预挂及待挂），实际成交量按真实成交价统计。",
+    },
+}
 
 
 class DataError(ValueError):
@@ -122,14 +134,22 @@ def parse_data(sheets: dict[str, list[list[str]]]) -> dict:
         price_rows, daily_rows = sheets["价格发行与成交"], sheets["每日K线"]
     except KeyError as error:
         raise DataError(f"Required worksheet missing: {error.args[0]}") from error
-    require_headers(price_rows, PRICE_HEADERS, "价格发行与成交")
+    normalized_price_headers = [re.sub(r"\s+", "", value) for value in price_rows[0]] if price_rows else []
+    schema = PRICE_SCHEMAS.get(normalized_price_headers[1]) if len(normalized_price_headers) > 1 else None
+    if schema is None:
+        raise DataError(f"Unexpected column headers in 价格发行与成交: {normalized_price_headers}")
+    expected_price_headers = PRICE_HEADERS.copy()
+    expected_price_headers[1] = normalized_price_headers[1]
+    require_headers(price_rows, expected_price_headers, "价格发行与成交")
     require_headers(daily_rows, DAILY_HEADERS, "每日K线")
     price_keys = ["price", "issued", "priceHighIssued", "volumeHighIssued", "volume"]
     prices, daily, price_notes, daily_notes = [], [], [], []
     price_totals, daily_totals = None, None
     for row_number, row in enumerate(price_rows[1:], 2):
         row = row + [""] * (5 - len(row))
-        if row[0] == "已挂 / 成交合计":
+        if row[0] in {candidate["totalLabel"] for candidate in PRICE_SCHEMAS.values()}:
+            if row[0] != schema["totalLabel"]:
+                raise DataError(f"Price total label {row[0]!r} does not match issuance header {normalized_price_headers[1]!r}")
             if price_totals is not None:
                 raise DataError("Duplicate price total row")
             price_totals = {key: number(row[index], f"价格发行与成交 row {row_number}") for index, key in enumerate(price_keys) if index}
@@ -213,6 +233,7 @@ def parse_data(sheets: dict[str, list[list[str]]]) -> dict:
         "meta": {
             "sheetNames": ["价格发行与成交", "每日K线"],
             "priceUnit": "HK", "volumeUnit": "YDA", "turnoverUnit": "HK",
+            "issuanceBasis": schema["basis"], "issuanceDescription": schema["description"],
             "isSimulation": True, "calendar": "simulation-year", "timezone": "UTC",
             "priceCount": len(prices), "dayCount": len(daily),
             "firstDate": daily[0]["dateLabel"], "lastDate": daily[-1]["dateLabel"],

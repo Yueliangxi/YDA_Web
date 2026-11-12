@@ -9,6 +9,7 @@
 - 价格分布：读取「价格发行与成交」工作表，横轴为价格（HK），纵轴为数量（YDA）。每个价格的柱子按「价格新高发行」与「成交量新高发行」堆叠，叠加蓝色的实际成交量折线，默认分别使用左右轴。点击图例可以切换各系列。
 - 每日行情：读取「每日K线」工作表，以开盘、收盘、最低、最高价绘制日 K 线，并显示每日成交量。无成交日保留，沿用前一日收盘价。
 - 表一按价格汇总发行数量与实际成交量，表二按日期汇总实际成交行情。发行量和成交量口径不同，堆叠柱只合计两类发行数量。
+- 支持两版源表：「发行量（已挂）YDA」按实际挂单价归集（含预挂）；「发行量（整批）YDA」按每批主发行价归集（含预挂及待挂，预挂档位不拆发行量）。网页会说明当前使用的口径。实际成交量始终按真实成交价统计。
 - 日期沿用 Excel 中从「第1年」开始的模拟日历及其顺序，不按公历转换。浏览器的时区不会改变日期。
 - 所有价格单位均为 HK，所有数量单位均为 YDA。
 
@@ -28,12 +29,29 @@ python3 -m http.server 8000
 
 ## 更新行情
 
-1. 更新根目录中的 `YDA价格汇总与每日行情.xlsx`，保留原工作表与列结构。
-2. 运行 `python3 scripts/build_data.py` 重新生成 `data/market.json`。
-3. 运行 `python3 -m unittest discover -s tests` 检查数据转换。
-4. 提交 Excel、生成的数据及相关改动，推送到 `main`。
+只更新数据时，不需要修改网页代码或手动编辑 JSON。
 
-GitHub Actions 会重新读取 Excel、验证数据，并自动部署网页。也可以在仓库 Actions 中手动运行 **Deploy YDA market page**。转换或测试失败会阻止本次发布，已发布的网站不受影响。
+1. 把新文件命名为 **`YDA价格汇总与每日行情.xlsx`**，覆盖仓库根目录的同名文件。不要只新增带 `2`、日期或其他后缀的文件；发布流程只读取这个固定文件名。
+2. 保留两个工作表「价格发行与成交」「每日K线」及其列结构、合计行。数据行数可以改变；上述「已挂」与「整批」两版表头均受支持。
+3. 将替换后的 Excel 提交并推送到 `main`。也可以在 [GitHub 仓库](https://github.com/Yueliangxi/YDA_Web) 上传同名文件并提交到 `main`，直接替换旧文件。
+4. 在仓库 [Actions](https://github.com/Yueliangxi/YDA_Web/actions) 中等最新的 **Deploy YDA market page** 显示绿色成功，再刷新网站。如仍看到旧数据，稍等后强制刷新。
+
+如果使用本地命令行，在仓库根目录执行：
+
+```sh
+git add 'YDA价格汇总与每日行情.xlsx'
+git commit -m "Update market data"
+git push origin main
+```
+
+GitHub 发布时会自动重新生成 `data/market.json`，无需本地运行 Python。若要先在本地预览或同步本地 JSON，则运行：
+
+```sh
+python3 scripts/build_data.py
+python3 -m unittest discover -s tests
+```
+
+GitHub Actions 会重新读取 Excel、验证数据，并自动部署网页。转换或测试失败会阻止本次发布，已发布的网站不受影响；打开失败的运行查看 **Generate and validate market data** 步骤的具体原因。手动运行 **Deploy YDA market page** 只会读取已经提交到 GitHub 的 Excel，不会读取电脑中尚未推送的文件。
 
 ## GitHub Pages
 

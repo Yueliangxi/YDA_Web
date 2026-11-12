@@ -39,7 +39,7 @@
         <div class="chart-meta"><div class="legend chart-legend" aria-label="点击切换图表系列"><button type="button" data-series="最高价发行" aria-pressed="true"><i class="swatch issuance-price"></i>最高价发行</button><button type="button" data-series="最高成交量发行" aria-pressed="true"><i class="swatch issuance-volume"></i>最高成交量发行</button><button type="button" data-series="实际成交量" aria-pressed="true"><i class="line-swatch"></i>实际成交量</button></div><span id="price-range" class="range-label"></span></div>
         <div id="price-chart" class="chart price-chart" role="img" aria-label="按价格排列的堆叠发行量柱状图及实际成交量曲线，可用上方按钮缩放，下方选择价格查看数值。"></div>
         <div class="price-detail"><label for="price-select">查看价格 <select id="price-select" aria-label="选择价格查看发行和成交数据"></select></label><dl><div><dt>最高价发行</dt><dd id="price-issued-high"></dd></div><div><dt>最高成交量发行</dt><dd id="price-issued-volume"></dd></div><div><dt>发行合计</dt><dd id="price-issued-total"></dd></div><div><dt>实际成交量</dt><dd id="price-traded"></dd></div></dl></div>
-        <div class="card-note"><span id="price-axis-note">两色柱读左轴，蓝线读右轴。左右刻度不同；切换统一刻度可比较实际数量大小。</span><span class="gesture-hint">滚轮 / 双指缩放 · 拖动平移</span></div>
+        <div class="card-note"><div><span id="issuance-basis">发行量按源表价格归集，实际成交量按真实成交价统计。</span><br><span id="price-axis-note">两色柱读左轴，蓝线读右轴。左右刻度不同；切换统一刻度可比较实际数量大小。</span></div><span class="gesture-hint">滚轮 / 双指缩放 · 拖动平移</span></div>
       </section>
 
       <section class="chart-card" id="daily" aria-labelledby="daily-title">
