@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f6f3">
+  <meta name="description" content="YDA 模拟行情：按价格查看两类发行数量，缩放每日 K 线，浏览每一天的交易数据。">
+  <title>YDA · 行情一览</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <script defer src="./vendor/echarts.min.js"></script>
+  <script defer src="./app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳转至行情</a>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="#" aria-label="YDA 行情首页"><span class="brand-symbol" aria-hidden="true"><i></i><i></i><i></i></span><b>YDA</b><span class="brand-caption">MARKET OVERVIEW</span></a>
+      <nav aria-label="页面导航"><a href="#distribution">发行分布</a><a href="#daily">每日行情 <span aria-hidden="true">↗</span></a></nav>
+    </div>
+  </header>
+  <main id="main">
+    <section class="intro" aria-labelledby="page-title">
+      <div><div class="eyebrow"><span class="status-dot"></span> YDA / HK <span class="tag">模拟行情</span></div><h1 id="page-title">行情一览<span>Market overview</span></h1></div>
+      <p id="data-coverage" class="coverage">正在读取行情数据…</p>
+    </section>
+    <div id="load-error" class="error" role="alert" hidden></div>
+    <noscript><p class="error">请启用 JavaScript 以查看交互图表。</p></noscript>
+    <div id="dashboard" hidden>
+      <section class="summary-grid" aria-label="行情概况">
+        <article class="summary-card primary-summary"><p>最新收盘价 <span id="latest-date"></span></p><div class="metric"><strong id="latest-close">—</strong><span>HK</span></div><div id="latest-change" class="metric-note"></div></article>
+        <article class="summary-card"><p>累计成交量 <span class="tiny-label">全部日期</span></p><div class="metric"><strong id="total-volume">—</strong><span>YDA</span></div><div class="metric-note" id="day-count"></div></article>
+        <article class="summary-card"><p>累计发行量 <span class="tiny-label">全部价格</span></p><div class="metric"><strong id="total-issued">—</strong><span>YDA</span></div><div class="metric-note" id="price-count"></div></article>
+      </section>
+
+      <section class="chart-card" id="distribution" aria-labelledby="distribution-title">
+        <div class="card-heading"><div><div class="section-kicker">01 / DISTRIBUTION</div><h2 id="distribution-title">价格发行与成交分布</h2><p>按价格查看两类发行数量，以及实际成交量。</p></div><div class="chart-tools" aria-label="发行图缩放"><button type="button" data-chart="price" data-action="out" aria-label="缩小发行图">−</button><button type="button" data-chart="price" data-action="in" aria-label="放大发行图">+</button><button type="button" data-chart="price" data-action="reset">重置</button><button type="button" data-expand="distribution" aria-label="展开价格发行图">⤢</button></div></div>
+        <div class="chart-meta"><div class="legend chart-legend" aria-label="点击切换图表系列"><button type="button" data-series="最高价发行" aria-pressed="true"><i class="swatch issuance-price"></i>最高价发行</button><button type="button" data-series="最高成交量发行" aria-pressed="true"><i class="swatch issuance-volume"></i>最高成交量发行</button><button type="button" data-series="实际成交量" aria-pressed="true"><i class="line-swatch"></i>实际成交量</button></div><span id="price-range" class="range-label"></span></div>
+        <div id="price-chart" class="chart price-chart" role="img" aria-label="按价格排列的堆叠发行量柱状图及实际成交量曲线，可用上方按钮缩放，下方选择价格查看数值。"></div>
+        <div class="price-detail"><label for="price-select">查看价格 <select id="price-select" aria-label="选择价格查看发行和成交数据"></select></label><dl><div><dt>最高价发行</dt><dd id="price-issued-high"></dd></div><div><dt>最高成交量发行</dt><dd id="price-issued-volume"></dd></div><div><dt>发行合计</dt><dd id="price-issued-total"></dd></div><div><dt>实际成交量</dt><dd id="price-traded"></dd></div></dl></div>
+        <div class="card-note"><span>两色柱为发行量，蓝线为实际成交量，共用 YDA 数量轴。点击图例可切换显示。</span><span class="gesture-hint">滚轮 / 双指缩放 · 拖动平移</span></div>
+      </section>
+
+      <section class="chart-card" id="daily" aria-labelledby="daily-title">
+        <div class="card-heading"><div><div class="section-kicker">02 / DAILY MARKET</div><h2 id="daily-title">每日 K 线</h2><p>放大看细节，选择任意一天查看完整行情。</p></div><div class="chart-tools" aria-label="K 线图缩放"><button type="button" data-chart="daily" data-action="out" aria-label="缩小 K 线图">−</button><button type="button" data-chart="daily" data-action="in" aria-label="放大 K 线图">+</button><button type="button" data-chart="daily" data-action="reset">重置</button><button type="button" data-expand="daily" aria-label="展开每日 K 线图">⤢</button></div></div>
+        <div class="market-toolbar"><div class="periods" role="group" aria-label="显示天数"><button type="button" data-period="30" aria-pressed="false">近 30 天</button><button type="button" data-period="90" aria-pressed="false">近 90 天</button><button type="button" data-period="365" aria-pressed="false">近 1 年</button><button type="button" data-period="all" class="active" aria-pressed="true">全部</button></div><div class="legend"><span><i class="swatch up"></i>涨</span><span><i class="swatch down"></i>跌</span><span><i class="swatch flat"></i>平</span></div></div>
+        <div class="range-controls"><label>从 <select id="range-start" aria-label="行情起始日期"></select></label><span aria-hidden="true">—</span><label>至 <select id="range-end" aria-label="行情结束日期"></select></label><button type="button" id="apply-range">查看区间</button><span id="daily-range" class="range-label" aria-live="polite"></span></div>
+        <p id="range-error" class="field-error" role="alert" hidden></p>
+        <div id="daily-chart" class="chart daily-chart" role="img" aria-label="每日开高低收 K 线图及成交量图，可缩放，下方逐日明细提供全部数据。"></div>
+        <div class="daily-inspector">
+          <div class="inspector-heading"><div class="inspector-title"><span class="status-dot"></span><h3>逐日明细</h3><span id="selected-day-number" class="tiny-label"></span></div><div class="day-navigation"><button type="button" id="prev-day" aria-label="前一天">←</button><select id="day-select" aria-label="选择查看日期"></select><button type="button" id="next-day" aria-label="后一天">→</button></div></div>
+          <dl class="daily-values" id="daily-values"></dl>
+          <div class="day-status"><span id="daily-status"></span><span>涨跌颜色按当日收盘价与开盘价比较</span></div>
+        </div>
+        <div class="card-note"><span>日期沿用 Excel 的模拟年份，不对应公历年份。每根 K 线代表一天。</span><span class="gesture-hint">点击 K 线查看当日 · 底部滑块选择区间</span></div>
+      </section>
+
+      <details class="data-table-section" id="data-table"><summary><span>每日数据表 <small>精确数值，按当前图表区间显示</small></span><span class="details-icon" aria-hidden="true">+</span></summary><div class="table-toolbar"><span id="table-count"></span><button id="download-csv" type="button">下载当前区间 CSV ↓</button></div><div class="table-scroll" tabindex="0" role="region" aria-label="可横向滚动的每日数据表"><table><thead><tr><th scope="col">模拟日期</th><th scope="col">开盘 / HK</th><th scope="col">最高 / HK</th><th scope="col">最低 / HK</th><th scope="col">收盘 / HK</th><th scope="col">成交量 / YDA</th><th scope="col">成交额 / HK</th><th scope="col">成交笔数</th></tr></thead><tbody id="table-body"></tbody></table></div><div class="table-pagination"><button type="button" id="table-prev">上一页</button><span id="table-page"></span><button type="button" id="table-next">下一页</button></div></details>
+      <footer><div><b>YDA</b><span>价格以 HK 计 · 数量以 YDA 计</span></div><span>数据来源：YDA价格汇总与每日行情.xlsx</span></footer>
+    </div>
+  </main>
+</body>
+</html>
