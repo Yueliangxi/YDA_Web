@@ -61,19 +61,22 @@
     chart.setOption({
       animation: false, textStyle: { fontFamily: 'sans-serif' },
       legend: { show: false, data: ['最高价发行', '最高成交量发行', '实际成交量'] },
-      grid: { left: 60, right: 28, top: 40, bottom: 82 },
+      grid: { left: 60, right: 62, top: 40, bottom: 82 },
       tooltip: { ...tooltip, formatter(params) {
         const d = prices[params[0]?.dataIndex];
         if (!d) return '';
         return `<div class="chart-tooltip"><b>${price(d.price)} HK</b>${tooltipRow('最高价发行', `${number(d.priceHighIssued)} YDA`)}${tooltipRow('最高成交量发行', `${number(d.volumeHighIssued)} YDA`)}${tooltipRow('发行合计', `${number(d.issued)} YDA`)}${tooltipRow('实际成交量', `${number(d.volume)} YDA`)}</div>`;
       } },
       xAxis: { ...axisStyle, type: 'category', data: prices.map((d) => price(d.price)), name: '价格 / HK', nameLocation: 'middle', nameGap: 28, nameTextStyle: { color: colors.label, fontSize: 10 }, splitLine: { show: false } },
-      yAxis: { ...axisStyle, type: 'value', name: '数量 / YDA', nameTextStyle: { color: colors.label, fontSize: 10, align: 'left' }, axisLine: { show: false }, axisLabel: { ...axisStyle.axisLabel, formatter: axisNumber } },
-      dataZoom: zoomOptions([0]),
+      yAxis: [
+        { ...axisStyle, type: 'value', name: '发行量 / YDA', nameTextStyle: { color: colors.price, fontSize: 10, align: 'left' }, axisLine: { show: false }, axisLabel: { ...axisStyle.axisLabel, formatter: axisNumber } },
+        { ...axisStyle, type: 'value', position: 'right', name: '成交量 / YDA', nameTextStyle: { color: colors.traded, fontSize: 10, align: 'right' }, splitLine: { show: false }, axisLine: { show: false }, axisLabel: { ...axisStyle.axisLabel, color: colors.traded, formatter: axisNumber } },
+      ],
+      dataZoom: zoomOptions([0]).map((option) => option.type === 'slider' ? { ...option, right: 62 } : option),
       series: [
         { name: '最高价发行', type: 'bar', stack: 'issued', data: prices.map((d) => d.priceHighIssued), itemStyle: { color: colors.price }, barMaxWidth: 35, emphasis: { focus: 'series' } },
         { name: '最高成交量发行', type: 'bar', stack: 'issued', data: prices.map((d) => d.volumeHighIssued), itemStyle: { color: colors.issued }, barMaxWidth: 35, emphasis: { focus: 'series' } },
-        { name: '实际成交量', type: 'line', data: prices.map((d) => d.volume), symbol: 'circle', symbolSize: 5, showSymbol: false, lineStyle: { width: 2, color: colors.traded }, itemStyle: { color: colors.traded }, z: 4 },
+        { name: '实际成交量', type: 'line', yAxisIndex: 1, data: prices.map((d) => d.volume), symbol: 'circle', symbolSize: 5, showSymbol: false, lineStyle: { width: 2, color: colors.traded }, itemStyle: { color: colors.traded }, z: 4 },
       ],
     });
     chart.on('click', (params) => { if (params.componentType === 'series') selectPrice(params.dataIndex); });
@@ -267,6 +270,22 @@
   }
 
   function bindControls() {
+    document.querySelectorAll('[data-price-scale]').forEach((button) => button.addEventListener('click', () => {
+      const separate = button.dataset.priceScale === 'separate';
+      state.charts.price.setOption({
+        grid: { right: separate ? 62 : 28 },
+        yAxis: [{ name: separate ? '发行量 / YDA' : '数量 / YDA' }, { show: separate }],
+        dataZoom: [{}, { right: separate ? 62 : 28 }],
+        series: [{ name: '实际成交量', yAxisIndex: separate ? 1 : 0 }],
+      });
+      document.querySelectorAll('[data-price-scale]').forEach((control) => {
+        const active = control === button;
+        control.classList.toggle('active', active);
+        control.setAttribute('aria-pressed', String(active));
+      });
+      $('scale-description').textContent = separate ? '左轴看发行，右轴看成交' : '同一刻度，直接比较数量';
+      $('price-axis-note').textContent = separate ? '两色柱读左轴，蓝线读右轴。左右刻度不同；切换统一刻度可比较实际数量大小。' : '两色柱为发行量，蓝线为实际成交量，共用 YDA 数量轴。点击图例可切换显示。';
+    }));
     document.querySelectorAll('[data-chart]').forEach((button) => button.addEventListener('click', () => changeZoom(button.dataset.chart, button.dataset.action)));
     document.querySelectorAll('[data-expand]').forEach((button) => button.addEventListener('click', () => toggleExpand(button.dataset.expand)));
     document.addEventListener('keydown', (event) => {

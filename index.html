@@ -35,10 +35,11 @@
 
       <section class="chart-card" id="distribution" aria-labelledby="distribution-title">
         <div class="card-heading"><div><div class="section-kicker">01 / DISTRIBUTION</div><h2 id="distribution-title">价格发行与成交分布</h2><p>按价格查看两类发行数量，以及实际成交量。</p></div><div class="chart-tools" aria-label="发行图缩放"><button type="button" data-chart="price" data-action="out" aria-label="缩小发行图">−</button><button type="button" data-chart="price" data-action="in" aria-label="放大发行图">+</button><button type="button" data-chart="price" data-action="reset">重置</button><button type="button" data-expand="distribution" aria-label="展开价格发行图">⤢</button></div></div>
+        <div class="scale-controls"><div class="periods" role="group" aria-label="发行与成交量刻度"><button type="button" data-price-scale="separate" class="active" aria-pressed="true">独立刻度</button><button type="button" data-price-scale="shared" aria-pressed="false">统一刻度</button></div><span id="scale-description">左轴看发行，右轴看成交</span></div>
         <div class="chart-meta"><div class="legend chart-legend" aria-label="点击切换图表系列"><button type="button" data-series="最高价发行" aria-pressed="true"><i class="swatch issuance-price"></i>最高价发行</button><button type="button" data-series="最高成交量发行" aria-pressed="true"><i class="swatch issuance-volume"></i>最高成交量发行</button><button type="button" data-series="实际成交量" aria-pressed="true"><i class="line-swatch"></i>实际成交量</button></div><span id="price-range" class="range-label"></span></div>
         <div id="price-chart" class="chart price-chart" role="img" aria-label="按价格排列的堆叠发行量柱状图及实际成交量曲线，可用上方按钮缩放，下方选择价格查看数值。"></div>
         <div class="price-detail"><label for="price-select">查看价格 <select id="price-select" aria-label="选择价格查看发行和成交数据"></select></label><dl><div><dt>最高价发行</dt><dd id="price-issued-high"></dd></div><div><dt>最高成交量发行</dt><dd id="price-issued-volume"></dd></div><div><dt>发行合计</dt><dd id="price-issued-total"></dd></div><div><dt>实际成交量</dt><dd id="price-traded"></dd></div></dl></div>
-        <div class="card-note"><span>两色柱为发行量，蓝线为实际成交量，共用 YDA 数量轴。点击图例可切换显示。</span><span class="gesture-hint">滚轮 / 双指缩放 · 拖动平移</span></div>
+        <div class="card-note"><span id="price-axis-note">两色柱读左轴，蓝线读右轴。左右刻度不同；切换统一刻度可比较实际数量大小。</span><span class="gesture-hint">滚轮 / 双指缩放 · 拖动平移</span></div>
       </section>
 
       <section class="chart-card" id="daily" aria-labelledby="daily-title">
