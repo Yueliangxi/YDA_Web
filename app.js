@@ -114,7 +114,7 @@
           min: (extent) => Number((extent.min - Math.max(0.001, (extent.max - extent.min) * 0.1)).toFixed(3)),
           max: (extent) => Number((extent.max + Math.max(0.001, (extent.max - extent.min) * 0.1)).toFixed(3)),
           axisLabel: { ...axisStyle.axisLabel, formatter: (v) => price(v) }, axisLine: { show: false } },
-        { ...axisStyle, type: 'value', gridIndex: 1, name: '成交量 / YDA', nameTextStyle: { color: colors.label, fontSize: 10, align: 'left' }, splitNumber: 2, axisLine: { show: false }, axisLabel: { ...axisStyle.axisLabel, formatter: axisNumber } },
+        { ...axisStyle, type: 'value', gridIndex: 1, name: '成交量 / YDA', nameTextStyle: { color: colors.label, fontSize: 10, align: 'left' }, splitNumber: 2, minInterval: 1, axisLine: { show: false }, axisLabel: { ...axisStyle.axisLabel, formatter: axisNumber } },
       ],
       dataZoom: zoomOptions([0, 1]),
       series: [
@@ -180,6 +180,9 @@
       button.setAttribute('aria-pressed', String(active));
     });
     state.page = 0;
+    if (state.selectedDay < range[0] || state.selectedDay > range[1]) {
+      selectDay(Math.max(range[0], Math.min(range[1], state.selectedDay)));
+    }
     if ($('data-table').open) renderTable();
   }
 
