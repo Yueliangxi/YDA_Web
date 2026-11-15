@@ -5,12 +5,17 @@
   const $ = (id) => document.getElementById(id);
   const colors = { price: '#245b4b', issued: '#d9bb70', traded: '#688fbd', up: '#218064', down: '#c76152', flat: '#98a29a', grid: '#edf0e8', label: '#8b9884' };
   const number = (value, decimals = 2) => Number(value).toLocaleString('en-US', { maximumFractionDigits: decimals });
-  const price = (value) => Number(value).toFixed(3);
+  const price = (value) => value == null ? '—' : Number(value).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 8 });
+  const math = window.YDAMarketMath;
+  const signed = (value, decimals = 4) => value == null ? '—' : `${value > 0 ? '+' : ''}${number(value, decimals)}`;
+  const percent = (value) => value == null ? '—' : `${signed(value)}%`;
+  const trend = (value) => value > 0 ? 'positive' : value < 0 ? 'negative' : '';
+  const intervalNames = { day: '日', week: '周', month: '月', year: '年' };
   const compact = (value) => Math.abs(value) >= 1e8 ? `${number(value / 1e8)} 亿` : Math.abs(value) >= 1e4 ? `${number(value / 1e4)} 万` : number(value);
   const axisNumber = (value) => Math.abs(value) >= 1e8 ? `${number(value / 1e8, 1)}亿` : Math.abs(value) >= 1e4 ? `${number(value / 1e4, 1)}万` : number(value, 0);
   const escape = (text) => String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const tooltipRow = (label, value) => `<div><span>${label}</span><em>${value}</em></div>`;
-  const state = { data: null, charts: {}, dailyRange: [0, 0], priceRange: [0, 0], selectedDay: 0, selectedPrice: 0, page: 0 };
+  const state = { data: null, charts: {}, dailyRange: [0, 0], priceRange: [0, 0], selectedDay: 0, selectedPrice: 0, page: 0, bars: [], interval: 'day', scale: 'price' };
   const pageSize = 25;
 
   const tooltip = {
@@ -38,15 +43,14 @@
 
   function setupSummary() {
     const { daily, prices } = state.data;
-    const latest = daily.at(-1), previous = daily.at(-2) || latest;
+    const latest = daily.at(-1);
     const volume = daily.reduce((sum, d) => sum + d.volume, 0);
     const issued = prices.reduce((sum, d) => sum + d.issued, 0);
     $('data-coverage').textContent = `${daily[0].dateLabel} — ${latest.dateLabel} · 共 ${number(daily.length, 0)} 天`;
     $('latest-date').textContent = latest.dateLabel;
     $('latest-close').textContent = price(latest.close);
-    const change = latest.close - previous.close;
-    const pct = previous.close ? change / previous.close * 100 : 0;
-    $('latest-change').textContent = `${change > 0 ? '+' : ''}${pct.toFixed(2)}% 较前一日${latest.volume === 0 ? ' · 当日无成交' : ''}`;
+    const { change, changePct } = math.metrics(daily, daily.length - 1);
+    $('latest-change').textContent = `${percent(changePct)} 较前一日${latest.volume === 0 ? ' · 当日无成交' : ''}`;
     $('latest-change').classList.toggle('positive', change > 0);
     $('latest-change').classList.toggle('negative', change < 0);
     $('total-volume').textContent = compact(volume);
@@ -99,72 +103,131 @@
     if (reveal) revealIndex('price', index);
   }
 
+  function barDates(d) {
+    const first = state.data.daily[d.startIndex], last = state.data.daily[d.endIndex];
+    return d.startIndex === d.endIndex ? first.dateLabel : `${first.dateLabel} — ${last.dateLabel}`;
+  }
+
   function renderDailyChart() {
-    const daily = state.data.daily;
     const chart = state.charts.daily = echarts.init($('daily-chart'), null, { renderer: 'canvas' });
-    const xAxis = { ...axisStyle, type: 'category', data: daily.map((d) => d.dateLabel), boundaryGap: true, splitLine: { show: false }, axisLabel: { ...axisStyle.axisLabel, formatter: (label) => label.replace(/^第/, '').replace('月', '/').replace('日', '') } };
-    chart.setOption({
-      animation: false, textStyle: { fontFamily: 'sans-serif' },
-      grid: [{ left: 60, right: 28, top: 40, height: '48%' }, { left: 60, right: 28, top: '68%', bottom: 66 }],
-      axisPointer: { link: [{ xAxisIndex: 'all' }] },
-      tooltip: { ...tooltip, formatter(params) {
-        const d = daily[params[0]?.dataIndex];
-        if (!d) return '';
-        return `<div class="chart-tooltip"><b>${escape(d.dateLabel)}</b>${tooltipRow('开盘', `${price(d.open)} HK`)}${tooltipRow('最高', `${price(d.high)} HK`)}${tooltipRow('最低', `${price(d.low)} HK`)}${tooltipRow('收盘', `${price(d.close)} HK`)}${tooltipRow('成交量', `${number(d.volume)} YDA`)}${tooltipRow('成交额', `${number(d.turnover)} HK`)}${tooltipRow('成交笔数', number(d.tradeCount, 0))}<span>${escape(d.status)}</span></div>`;
-      } },
-      xAxis: [{ ...xAxis, gridIndex: 0, axisLabel: { show: false }, axisLine: { show: false } }, { ...xAxis, gridIndex: 1 }],
-      yAxis: [
-        { ...axisStyle, type: 'value', gridIndex: 0, scale: true, name: '价格 / HK', nameTextStyle: { color: colors.label, fontSize: 10, align: 'left' }, splitNumber: 4, minInterval: 0.001,
-          min: (extent) => Number((extent.min - Math.max(0.001, (extent.max - extent.min) * 0.1)).toFixed(3)),
-          max: (extent) => Number((extent.max + Math.max(0.001, (extent.max - extent.min) * 0.1)).toFixed(3)),
-          axisLabel: { ...axisStyle.axisLabel, formatter: (v) => price(v) }, axisLine: { show: false } },
-        { ...axisStyle, type: 'value', gridIndex: 1, name: '成交量 / YDA', nameTextStyle: { color: colors.label, fontSize: 10, align: 'left' }, splitNumber: 2, minInterval: 1, axisLine: { show: false }, axisLabel: { ...axisStyle.axisLabel, formatter: axisNumber } },
-      ],
-      dataZoom: zoomOptions([0, 1]),
-      series: [
-        { name: '每日 K 线', type: 'candlestick', xAxisIndex: 0, yAxisIndex: 0, barMaxWidth: 25, data: daily.map((d) => [d.open, d.close, d.low, d.high]),
-          itemStyle: { color: colors.up, color0: colors.down, borderColor: colors.up, borderColor0: colors.down, borderColorDoji: colors.flat }, emphasis: { itemStyle: { borderWidth: 2 } } },
-        { name: '成交量', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, barMaxWidth: 25, data: daily.map((d) => ({ value: d.volume, itemStyle: { color: d.close > d.open ? colors.up : d.close < d.open ? colors.down : colors.flat, opacity: 0.62 } })) },
-      ],
-    });
-    chart.on('click', (params) => { if (params.componentType === 'series') selectDay(params.dataIndex); });
     chart.on('datazoom', () => syncRange('daily'));
-    // Clicking empty space selects even a zero-volume day with a flat candle.
+    chart.on('updateAxisPointer', (event) => {
+      const axis = event.axesInfo?.find((info) => info.axisDim === 'x');
+      if (axis && Number.isInteger(Number(axis.value))) selectDay(Number(axis.value));
+    });
     chart.getZr().on('click', (event) => {
       const point = [event.offsetX, event.offsetY];
-      if (chart.containPixel({ gridIndex: 0 }, point)) {
-        const coordinate = chart.convertFromPixel({ gridIndex: 0 }, point);
-        selectDay(Math.round(coordinate[0]));
+      for (const gridIndex of [0, 1]) {
+        if (chart.containPixel({ gridIndex }, point)) {
+          selectDay(Math.round(chart.convertFromPixel({ gridIndex }, point)[0]));
+          break;
+        }
       }
     });
-    const options = daily.map((d, i) => `<option value="${i}">${escape(d.dateLabel)}</option>`).join('');
+    rebuildDailyChart();
+  }
+
+  function rebuildDailyChart() {
+    const chart = state.charts.daily;
+    const bars = state.bars = math.buildBars(state.data.daily, state.interval);
+    const end = bars.length - 1;
+    const start = Math.max(0, end - (window.matchMedia('(max-width: 640px)').matches ? 29 : 89));
+    state.dailyRange = [start, end];
+    const xAxis = { ...axisStyle, type: 'category', data: bars.map((d) => d.dateLabel), boundaryGap: true, splitLine: { show: false }, axisLabel: { ...axisStyle.axisLabel, fontSize: 11, formatter: (label) => label.replace('月', '/').replace('日', '') }, axisPointer: { show: true, snap: true, label: { show: true, backgroundColor: colors.price, fontSize: 11 } } };
+    chart.setOption({
+      animation: false, textStyle: { fontFamily: 'sans-serif' },
+      grid: [{ left: 76, right: 24, top: 32, height: '59%' }, { left: 76, right: 24, top: '73%', bottom: 72 }],
+      axisPointer: { link: [{ xAxisIndex: 'all' }], lineStyle: { color: '#81958a', type: 'dashed' } },
+      // The quote panel stays above the plot on touch screens, without obscuring candles.
+      tooltip: { trigger: 'axis', showContent: false, axisPointer: { type: 'cross', crossStyle: { color: '#81958a', type: 'dashed' } } },
+      xAxis: [{ ...xAxis, gridIndex: 0, axisLabel: { show: false }, axisLine: { show: false } }, { ...xAxis, gridIndex: 1 }],
+      yAxis: [
+        { ...axisStyle, type: 'value', gridIndex: 0, scale: true, splitNumber: 5, axisLine: { show: false }, nameTextStyle: { color: '#657b6e', fontSize: 11, align: 'left' }, axisPointer: { label: { backgroundColor: colors.price, formatter: ({ value }) => state.scale === 'percent' ? percent(value) : price(value) } } },
+        { ...axisStyle, type: 'value', gridIndex: 1, name: '成交量 / YDA', nameTextStyle: { color: '#657b6e', fontSize: 11, align: 'left' }, splitNumber: 2, min: 0, axisLine: { show: false }, axisLabel: { ...axisStyle.axisLabel, formatter: axisNumber }, axisPointer: { label: { formatter: ({ value }) => number(value) } } },
+      ],
+      dataZoom: zoomOptions([0, 1]).map((option) => ({ ...option, minValueSpan: 0, start: start / Math.max(1, end) * 100, end: 100, ...(option.type === 'slider' ? { left: 76, right: 24 } : {}) })),
+      series: [
+        { id: 'candles', name: `${intervalNames[state.interval]} K`, type: 'candlestick', xAxisIndex: 0, yAxisIndex: 0, barMaxWidth: 22,
+          data: bars.map((d) => [d.open, d.close, d.low, d.high]),
+          itemStyle: { color: colors.up, color0: colors.down, borderColor: colors.up, borderColor0: colors.down, borderColorDoji: colors.flat, borderWidth: 1.5 }, emphasis: { itemStyle: { borderWidth: 2.5 } } },
+        { id: 'volume', name: '成交量', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, barMaxWidth: 22, data: bars.map((d) => ({ value: d.volume, itemStyle: { color: d.close > d.open ? colors.up : d.close < d.open ? colors.down : colors.flat, opacity: 0.65 } })) },
+      ],
+    }, true);
+    const options = bars.map((d, i) => `<option value="${i}">${escape(d.dateLabel)}</option>`).join('');
     ['range-start', 'range-end', 'day-select'].forEach((id) => { $(id).innerHTML = options; });
-    selectDay(daily.length - 1);
+    $('daily-title').textContent = `${intervalNames[state.interval]} K 行情`;
+    $('prev-day').setAttribute('aria-label', '上一根 K 线');
+    $('next-day').setAttribute('aria-label', '下一根 K 线');
+    document.querySelectorAll('[data-interval]').forEach((button) => {
+      const active = button.dataset.interval === state.interval;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
+    selectDay(end);
     syncRange('daily');
   }
 
+  function updateDailyScale() {
+    const [start, end] = state.dailyRange;
+    const bars = state.bars, base = bars[start].close;
+    const usePercent = state.scale === 'percent' && base > 0;
+    const convert = (value) => usePercent ? math.percentFrom(value, base) : value;
+    const bounds = math.priceBounds(bars, start, end);
+    const last = bars[end];
+    const axisDecimals = Math.min(8, Math.max(3, Math.ceil(-Math.log10(Math.max(bounds.max - bounds.min, 1e-8))) + 1));
+    state.charts.daily.setOption({
+      yAxis: [{ name: usePercent ? '区间涨跌 / %' : '价格 / HK', min: convert(bounds.min), max: convert(bounds.max), axisLabel: { ...axisStyle.axisLabel, fontSize: 11, formatter: (value) => usePercent ? `${number(value, 4)}%` : number(value, axisDecimals) } }, {}],
+      series: [{ id: 'candles', data: bars.map((d) => [d.open, d.close, d.low, d.high].map(convert)), markLine: { silent: true, symbol: ['none', 'none'], lineStyle: { color: '#85998d', type: 'dashed', width: 1 }, label: { position: 'insideEndTop', formatter: `末收 ${usePercent ? percent(convert(last.close)) : price(last.close)}`, color: '#547060', fontSize: 10 }, data: [{ yAxis: convert(last.close) }] } }],
+    });
+    $('scale-basis').textContent = usePercent
+      ? `0% 基准：${bars[start].dateLabel}收盘 ${price(base)} HK；缩放或平移后随区间起点变化。`
+      : state.scale === 'percent' ? '区间起点收盘价为 0，无法计算百分比；当前显示 HK 价格。' : 'HK 价格轴随可见区间自动缩放。虚线为区间最后一根收盘价。';
+    document.querySelectorAll('[data-daily-scale]').forEach((button) => {
+      const active = button.dataset.dailyScale === state.scale;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
+  }
+
   function selectDay(index, reveal = false) {
-    const d = state.data.daily[index];
-    if (!d) return;
+    const d = state.bars[index];
+    if (!d || (state.quoteBar === d && !reveal)) return;
+    state.quoteBar = d;
     state.selectedDay = index;
+    const m = math.metrics(state.bars, index);
     $('day-select').value = index;
-    $('selected-day-number').textContent = `第 ${number(d.day, 0)} 天`;
+    $('selected-day-number').textContent = barDates(d);
+    $('quote-close').textContent = price(d.close);
+    $('quote-close').className = trend(m.change);
+    $('quote-change').textContent = `${signed(m.change, 8)} HK / ${percent(m.changePct)}`;
+    $('quote-change').className = trend(m.change);
+    $('quote-comparison').textContent = `较前一${intervalNames[state.interval]}收盘`;
     $('prev-day').disabled = index === 0;
-    $('next-day').disabled = index === state.data.daily.length - 1;
-    const values = [['开盘价', price(d.open), 'HK'], ['最高价', price(d.high), 'HK'], ['最低价', price(d.low), 'HK'], ['收盘价', price(d.close), 'HK'], ['成交量', number(d.volume), 'YDA'], ['成交额', number(d.turnover), 'HK'], ['成交笔数', number(d.tradeCount, 0), '笔'], ['日内涨跌', `${d.close > d.open ? '+' : ''}${(d.open ? (d.close - d.open) / d.open * 100 : 0).toFixed(2)}`, '%']];
-    $('daily-values').innerHTML = values.map(([label, value, unit], i) => `<div><dt>${label}</dt><dd${i === 7 ? ` class="${d.close > d.open ? 'positive' : d.close < d.open ? 'negative' : ''}"` : ''}>${value}<small>${unit}</small></dd></div>`).join('');
-    $('daily-status').textContent = d.status;
+    $('next-day').disabled = index === state.bars.length - 1;
+    const values = [['开盘', price(d.open), 'HK'], ['最高', price(d.high), 'HK'], ['最低', price(d.low), 'HK'], ['前收', price(m.previousClose), 'HK'], ['涨跌幅', percent(m.changePct), '', trend(m.change)], ['振幅', m.amplitudePct == null ? '—' : `${number(m.amplitudePct, 4)}%`, ''], ['成交量', compact(d.volume), 'YDA'], ['成交额', compact(d.turnover), 'HK']];
+    $('daily-values').innerHTML = values.map(([label, value, unit, cls]) => `<div><dt>${label}</dt><dd class="${cls || ''}">${value}<small>${unit}</small></dd></div>`).join('');
+    $('daily-status').textContent = `${d.status || ''} · ${number(d.tradeCount, 0)} 笔`;
+    if ($('data-table').open) {
+      document.querySelectorAll('#table-body tr').forEach((row) => {
+        const day = Number(row.dataset.dayIndex);
+        row.classList.toggle('selected', day >= d.startIndex && day <= d.endIndex);
+      });
+    }
     if (reveal) {
       revealIndex('daily', index);
       state.charts.daily.dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex: index });
+      if ($('data-table').open) renderTable();
     }
-    if ($('data-table').open) renderTable();
+  }
+
+  function rawDailyRange() {
+    return [state.bars[state.dailyRange[0]].startIndex, state.bars[state.dailyRange[1]].endIndex];
   }
 
   function rangeFromChart(kind) {
     const zoom = state.charts[kind].getOption().dataZoom[0];
-    const count = kind === 'price' ? state.data.prices.length : state.data.daily.length;
-    return [Math.max(0, Math.round(zoom.start / 100 * (count - 1))), Math.min(count - 1, Math.round(zoom.end / 100 * (count - 1)))];
+    const count = kind === 'price' ? state.data.prices.length : state.bars.length;
+    return [Math.max(0, Math.round(zoom.startValue ?? zoom.start / 100 * (count - 1))), Math.min(count - 1, Math.round(zoom.endValue ?? zoom.end / 100 * (count - 1)))];
   }
 
   function syncRange(kind) {
@@ -176,10 +239,11 @@
     }
     $('range-start').value = range[0];
     $('range-end').value = range[1];
-    $('daily-range').textContent = `显示 ${number(range[1] - range[0] + 1, 0)} / ${number(state.data.daily.length, 0)} 天`;
+    $('daily-range').textContent = `显示 ${number(range[1] - range[0] + 1, 0)} / ${number(state.bars.length, 0)} 根${intervalNames[state.interval]} K`;
+    updateDailyScale();
     document.querySelectorAll('[data-period]').forEach((button) => {
-      const count = button.dataset.period === 'all' ? state.data.daily.length : Number(button.dataset.period);
-      const active = range[1] === state.data.daily.length - 1 && range[0] === Math.max(0, state.data.daily.length - count);
+      const count = button.dataset.period === 'all' ? state.bars.length : Number(button.dataset.period);
+      const active = range[1] === state.bars.length - 1 && (button.dataset.period === 'all' ? range[0] === 0 : count < state.bars.length && range[0] === state.bars.length - count);
       button.classList.toggle('active', active);
       button.setAttribute('aria-pressed', String(active));
     });
@@ -198,14 +262,14 @@
   function revealIndex(kind, index) {
     const [start, end] = state[`${kind}Range`];
     if (index >= start && index <= end) return;
-    const last = (kind === 'price' ? state.data.prices.length : state.data.daily.length) - 1;
+    const last = (kind === 'price' ? state.data.prices.length : state.bars.length) - 1;
     const width = end - start;
     const newStart = Math.max(0, Math.min(last - width, index - Math.floor(width / 2)));
     setRange(kind, newStart, Math.min(last, newStart + width));
   }
 
   function changeZoom(kind, action) {
-    const last = (kind === 'price' ? state.data.prices.length : state.data.daily.length) - 1;
+    const last = (kind === 'price' ? state.data.prices.length : state.bars.length) - 1;
     if (action === 'reset') return setRange(kind, 0, last);
     const [start, end] = state[`${kind}Range`];
     const span = Math.min(last, Math.max(1, Math.round((end - start) * (action === 'in' ? 0.5 : 2))));
@@ -216,12 +280,12 @@
   }
 
   function renderTable() {
-    const [start, end] = state.dailyRange;
+    const [start, end] = rawDailyRange();
     const totalPages = Math.ceil((end - start + 1) / pageSize);
     state.page = Math.max(0, Math.min(state.page, totalPages - 1));
     const offset = start + state.page * pageSize;
     const rows = state.data.daily.slice(offset, Math.min(end + 1, offset + pageSize));
-    $('table-body').innerHTML = rows.map((d, i) => `<tr data-day-index="${offset + i}" class="${offset + i === state.selectedDay ? 'selected' : ''}"><td><button class="table-date" type="button" aria-label="查看 ${escape(d.dateLabel)} 明细">${escape(d.dateLabel)}</button></td><td>${price(d.open)}</td><td>${price(d.high)}</td><td>${price(d.low)}</td><td>${price(d.close)}</td><td>${number(d.volume, 8)}</td><td>${number(d.turnover, 8)}</td><td>${number(d.tradeCount, 0)}</td></tr>`).join('');
+    $('table-body').innerHTML = rows.map((d, i) => `<tr data-day-index="${offset + i}" class="${offset + i >= state.bars[state.selectedDay].startIndex && offset + i <= state.bars[state.selectedDay].endIndex ? 'selected' : ''}"><td><button class="table-date" type="button" aria-label="查看 ${escape(d.dateLabel)} 明细">${escape(d.dateLabel)}</button></td><td>${price(d.open)}</td><td>${price(d.high)}</td><td>${price(d.low)}</td><td>${price(d.close)}</td><td class="${trend(math.metrics(state.data.daily, offset + i).change)}">${percent(math.metrics(state.data.daily, offset + i).changePct)}</td><td>${number(d.volume, 8)}</td><td>${number(d.turnover, 8)}</td><td>${number(d.tradeCount, 0)}</td></tr>`).join('');
     $('table-count').textContent = `当前区间 ${number(end - start + 1, 0)} 天`;
     $('table-page').textContent = `${state.page + 1} / ${totalPages}`;
     $('table-prev').disabled = state.page === 0;
@@ -229,10 +293,10 @@
   }
 
   function downloadCsv() {
-    const [start, end] = state.dailyRange;
+    const [start, end] = rawDailyRange();
     const csvCell = (value) => `"${String(value).replace(/"/g, '""')}"`;
-    const rows = [['模拟日期', '开盘价(HK)', '最高价(HK)', '最低价(HK)', '收盘价(HK)', '成交量(YDA)', '成交额(HK)', '成交笔数', '状态'],
-      ...state.data.daily.slice(start, end + 1).map((d) => [d.dateLabel, d.open, d.high, d.low, d.close, d.volume, d.turnover, d.tradeCount, d.status])];
+    const rows = [['模拟日期', '开盘价(HK)', '最高价(HK)', '最低价(HK)', '收盘价(HK)', '前收盘价(HK)', '涨跌额(HK)', '涨跌幅(%)', '振幅(%)', '成交量(YDA)', '成交额(HK)', '成交笔数', '状态'],
+      ...state.data.daily.slice(start, end + 1).map((d, i) => { const m = math.metrics(state.data.daily, start + i); return [d.dateLabel, d.open, d.high, d.low, d.close, m.previousClose ?? '', m.change ?? '', m.changePct ?? '', m.amplitudePct ?? '', d.volume, d.turnover, d.tradeCount, d.status]; })];
     const url = URL.createObjectURL(new Blob(['\uFEFF', rows.map((row) => row.map(csvCell).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a');
     link.href = url;
@@ -271,6 +335,12 @@
   }
 
   function bindControls() {
+    document.querySelectorAll('[data-interval]').forEach((button) => button.addEventListener('click', () => {
+      state.interval = button.dataset.interval;
+      $('range-error').hidden = true;
+      rebuildDailyChart();
+    }));
+    document.querySelectorAll('[data-daily-scale]').forEach((button) => button.addEventListener('click', () => { state.scale = button.dataset.dailyScale; updateDailyScale(); }));
     document.querySelectorAll('[data-price-scale]').forEach((button) => button.addEventListener('click', () => {
       const separate = button.dataset.priceScale === 'separate';
       state.charts.price.setOption({
@@ -310,8 +380,8 @@
     $('prev-day').addEventListener('click', () => selectDay(state.selectedDay - 1, true));
     $('next-day').addEventListener('click', () => selectDay(state.selectedDay + 1, true));
     document.querySelectorAll('[data-period]').forEach((button) => button.addEventListener('click', () => {
-      const count = button.dataset.period === 'all' ? state.data.daily.length : Number(button.dataset.period);
-      setRange('daily', Math.max(0, state.data.daily.length - count), state.data.daily.length - 1);
+      const count = button.dataset.period === 'all' ? state.bars.length : Number(button.dataset.period);
+      setRange('daily', Math.max(0, state.bars.length - count), state.bars.length - 1);
       $('range-error').hidden = true;
     }));
     $('apply-range').addEventListener('click', () => {
@@ -325,7 +395,11 @@
     $('data-table').addEventListener('toggle', () => { if ($('data-table').open) renderTable(); });
     $('table-prev').addEventListener('click', () => { state.page--; renderTable(); });
     $('table-next').addEventListener('click', () => { state.page++; renderTable(); });
-    $('table-body').addEventListener('click', (event) => { const row = event.target.closest('[data-day-index]'); if (row) selectDay(Number(row.dataset.dayIndex), true); });
+    $('table-body').addEventListener('click', (event) => { const row = event.target.closest('[data-day-index]'); if (row) {
+      const day = Number(row.dataset.dayIndex);
+      if (state.interval !== 'day') { state.interval = 'day'; rebuildDailyChart(); }
+      selectDay(day, true);
+    } });
     $('download-csv').addEventListener('click', downloadCsv);
     const observer = new ResizeObserver(() => Object.values(state.charts).forEach((chart) => chart.resize()));
     observer.observe($('price-chart'));
@@ -334,6 +408,7 @@
 
   async function init() {
     try {
+      if (!math) throw new Error('行情计算模块未能加载，请刷新页面重试。');
       if (!window.echarts) throw new Error('图表库未能加载，请刷新页面重试。');
       const response = await fetch('./data/market.json');
       if (!response.ok) throw new Error(`行情数据读取失败（${response.status}）。`);

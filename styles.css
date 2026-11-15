@@ -9,3 +9,18 @@
 @media(max-width:640px){.scale-controls{padding:0 16px 8px;gap:10px;flex-wrap:wrap}.scale-controls>span{font-size:9px}.scale-controls .periods button{min-height:34px;padding:5px 10px}}
 @media(max-width:360px){.range-controls label{grid-column:1/-1}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
+
+/* Market chart: persistent quotes and a larger, independently scaled price pane. */
+.positive{color:var(--up)}.negative{color:var(--down)}
+#daily .market-toolbar{justify-content:flex-start;flex-wrap:wrap;gap:12px}#daily .market-toolbar .periods{flex:none}#daily .market-toolbar .legend{margin-left:auto}
+.window-toolbar{display:flex;align-items:center;gap:16px;padding:0 28px 14px}.window-toolbar>span{font-size:11px;color:var(--muted)}.window-toolbar .periods{flex:none}
+#daily .daily-inspector{margin:18px 28px 0;padding:16px 20px;background:#f8faf6}.inspector-title{flex-wrap:wrap}.inspector-title .tiny-label{font-size:11px;line-height:1.6}
+.quote-head{display:flex;align-items:center;gap:28px;margin-top:16px;font-variant-numeric:tabular-nums}.quote-head>div{display:flex;align-items:baseline;gap:8px}.quote-label{font-size:11px;color:var(--muted)}#quote-close{font-size:30px;font-weight:600;letter-spacing:-.6px}.quote-head small{font-size:11px;color:var(--muted)}.quote-head .quote-return{flex-direction:column;gap:4px}.quote-return strong{font-size:16px;font-weight:600}.quote-return span{font-size:10px;color:var(--muted)}
+#daily .daily-values{grid-template-columns:repeat(8,minmax(0,1fr));gap:14px;margin:18px 0 14px}#daily .daily-values dd{font-size:14px;overflow-wrap:anywhere}#daily .daily-values dt{font-size:11px;margin-bottom:7px}#daily .daily-values dd small{display:block;margin:4px 0 0;font-size:9px}#daily .day-status{padding-top:10px;overflow-wrap:anywhere;color:#71826b}
+#daily .daily-chart{height:550px}.scale-basis{margin:0;padding:0 28px 14px;font-size:11px;line-height:1.7;color:#65776a}#daily.expanded .daily-chart{height:max(460px,calc(100dvh - 420px))}
+@media(max-width:1000px){#daily .daily-values{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:640px){#daily .market-toolbar{gap:10px}#daily .market-toolbar .periods{flex:1;white-space:nowrap}#daily .market-toolbar .legend{width:auto;margin-left:0;font-size:10px}.window-toolbar{padding:0 14px 12px;gap:8px}.window-toolbar>span{font-size:10px}.window-toolbar .periods{flex:1}.window-toolbar .periods button{padding:5px 8px}#daily .daily-inspector{margin:14px 12px 0;padding:12px}.inspector-title .tiny-label{font-size:10px}.quote-head{gap:14px;flex-wrap:wrap;margin-top:12px}#quote-close{font-size:26px}.quote-return strong{font-size:14px}#daily .daily-values{gap:14px 8px;margin-top:15px}#daily .daily-values dd{font-size:12px}#daily .daily-values dt{font-size:10px}#daily .daily-chart{height:480px}.scale-basis{padding:0 16px 12px;font-size:10px}#daily.expanded .daily-chart{height:max(480px,65dvh)}#daily .chart-tools button,#daily .periods button{min-height:40px}}
+
+@media(max-width:640px){.quote-head{gap:10px}.quote-label{display:none}#quote-close{font-size:24px}.quote-return strong{font-size:12px}.quote-head>div{gap:5px}}
+
+@media(max-width:360px){#daily .daily-values{grid-template-columns:repeat(3,minmax(0,1fr))}}
