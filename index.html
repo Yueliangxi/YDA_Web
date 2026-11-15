@@ -7,10 +7,10 @@
   <meta name="description" content="YDA 模拟行情：按价格查看两类发行数量，缩放每日 K 线，浏览每一天的交易数据。">
   <title>YDA · 行情一览</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=20261115">
+  <link rel="stylesheet" href="./styles.css?v=20261115-dual-axis">
   <script defer src="./vendor/echarts.min.js"></script>
-  <script defer src="./market-math.js?v=20261115"></script>
-  <script defer src="./app.js?v=20261115"></script>
+  <script defer src="./market-math.js?v=20261115-dual-axis"></script>
+  <script defer src="./app.js?v=20261115-dual-axis"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">跳转至行情</a>
@@ -47,7 +47,6 @@
         <div class="card-heading"><div><div class="section-kicker">02 / MARKET CHART</div><h2 id="daily-title">日 K 行情</h2><p>切换周期看趋势，缩放后查看每一根 K 线。</p></div><div class="chart-tools" aria-label="K 线图缩放"><button type="button" data-chart="daily" data-action="out" aria-label="缩小 K 线图">−</button><button type="button" data-chart="daily" data-action="in" aria-label="放大 K 线图">+</button><button type="button" data-chart="daily" data-action="reset">重置</button><button type="button" data-expand="daily" aria-label="展开每日 K 线图">⤢</button></div></div>
         <div class="market-toolbar">
           <div class="periods interval-switch" role="group" aria-label="K 线周期"><button type="button" data-interval="day" class="active" aria-pressed="true">日 K</button><button type="button" data-interval="week" aria-pressed="false">周 K</button><button type="button" data-interval="month" aria-pressed="false">月 K</button><button type="button" data-interval="year" aria-pressed="false">年 K</button></div>
-          <div class="periods" role="group" aria-label="K 线价格坐标"><button type="button" data-daily-scale="price" class="active" aria-pressed="true">HK 价格</button><button type="button" data-daily-scale="percent" aria-pressed="false">百分比 %</button></div>
           <div class="legend"><span><i class="swatch up"></i>阳线</span><span><i class="swatch down"></i>阴线</span><span><i class="swatch flat"></i>平盘</span></div>
         </div>
         <div class="window-toolbar"><span>显示范围</span><div class="periods" role="group" aria-label="显示 K 线数量"><button type="button" data-period="30" aria-pressed="false">近 30 根</button><button type="button" data-period="60" aria-pressed="false">近 60 根</button><button type="button" data-period="90" aria-pressed="false">近 90 根</button><button type="button" data-period="all" aria-pressed="false">全部</button></div></div>
@@ -59,7 +58,7 @@
           <dl class="daily-values" id="daily-values"></dl>
           <div class="day-status"><span id="daily-status"></span></div>
         </div>
-        <div id="daily-chart" class="chart daily-chart" role="img" aria-label="开高低收 K 线及成交量图。滚轮或双指缩放、拖动平移，悬停或点击查看上方行情，也可用日期选择和前后按钮查看每根 K 线。"></div>
+        <div id="daily-chart" class="chart daily-chart" role="img" aria-label="左轴 HK 价格、右轴涨跌百分比的开高低收 K 线及成交量图。滚轮或双指缩放、拖动平移，悬停或点击查看上方行情，也可用日期选择和前后按钮查看每根 K 线。"></div>
         <p id="scale-basis" class="scale-basis"></p>
         <div class="card-note"><span>涨跌幅 =（本根收盘 − 前收）÷ 前收；振幅 =（最高 − 最低）÷ 前收。无前收时显示 —。<br>阳线 / 阴线按本根收盘与开盘比较。周 K 从模拟起点每 7 天汇总；月 / 年沿用 Excel 模拟日历，末根可未满周期。</span><span class="gesture-hint">悬停 / 点击查看 · 双指缩放<br>拖动平移 · 底部滑块选择区间</span></div>
       </section>

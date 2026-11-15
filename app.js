@@ -15,7 +15,7 @@
   const axisNumber = (value) => Math.abs(value) >= 1e8 ? `${number(value / 1e8, 1)}亿` : Math.abs(value) >= 1e4 ? `${number(value / 1e4, 1)}万` : number(value, 0);
   const escape = (text) => String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const tooltipRow = (label, value) => `<div><span>${label}</span><em>${value}</em></div>`;
-  const state = { data: null, charts: {}, dailyRange: [0, 0], priceRange: [0, 0], selectedDay: 0, selectedPrice: 0, page: 0, bars: [], interval: 'day', scale: 'price' };
+  const state = { data: null, charts: {}, dailyRange: [0, 0], priceRange: [0, 0], selectedDay: 0, selectedPrice: 0, page: 0, bars: [], interval: 'day' };
   const pageSize = 25;
 
   const tooltip = {
@@ -136,16 +136,18 @@
     const xAxis = { ...axisStyle, type: 'category', data: bars.map((d) => d.dateLabel), boundaryGap: true, splitLine: { show: false }, axisLabel: { ...axisStyle.axisLabel, fontSize: 11, formatter: (label) => label.replace('月', '/').replace('日', '') }, axisPointer: { show: true, snap: true, label: { show: true, backgroundColor: colors.price, fontSize: 11 } } };
     chart.setOption({
       animation: false, textStyle: { fontFamily: 'sans-serif' },
-      grid: [{ left: 76, right: 24, top: 32, height: '59%' }, { left: 76, right: 24, top: '73%', bottom: 72 }],
+      grid: [{ left: 76, right: 84, top: 32, height: '59%' }, { left: 76, right: 84, top: '73%', bottom: 72 }],
       axisPointer: { link: [{ xAxisIndex: 'all' }], lineStyle: { color: '#81958a', type: 'dashed' } },
       // The quote panel stays above the plot on touch screens, without obscuring candles.
       tooltip: { trigger: 'axis', showContent: false, axisPointer: { type: 'cross', crossStyle: { color: '#81958a', type: 'dashed' } } },
       xAxis: [{ ...xAxis, gridIndex: 0, axisLabel: { show: false }, axisLine: { show: false } }, { ...xAxis, gridIndex: 1 }],
       yAxis: [
-        { ...axisStyle, type: 'value', gridIndex: 0, scale: true, splitNumber: 5, axisLine: { show: false }, nameTextStyle: { color: '#657b6e', fontSize: 11, align: 'left' }, axisPointer: { label: { backgroundColor: colors.price, formatter: ({ value }) => state.scale === 'percent' ? percent(value) : price(value) } } },
+        { ...axisStyle, type: 'value', gridIndex: 0, scale: true, splitNumber: 5, axisLine: { show: false }, nameTextStyle: { color: '#657b6e', fontSize: 11, align: 'left' }, axisPointer: { label: { backgroundColor: colors.price, formatter: ({ value }) => price(value) } } },
         { ...axisStyle, type: 'value', gridIndex: 1, name: '成交量 / YDA', nameTextStyle: { color: '#657b6e', fontSize: 11, align: 'left' }, splitNumber: 2, min: 0, axisLine: { show: false }, axisLabel: { ...axisStyle.axisLabel, formatter: axisNumber }, axisPointer: { label: { formatter: ({ value }) => number(value) } } },
+        // The right axis shares the HK domain, so every price and percent label aligns.
+        { ...axisStyle, type: 'value', gridIndex: 0, position: 'right', scale: true, splitNumber: 5, name: '区间涨跌 / %', nameTextStyle: { color: '#657b6e', fontSize: 11, align: 'right' }, axisLine: { show: false }, splitLine: { show: false }, axisPointer: { show: true, label: { backgroundColor: colors.price } } },
       ],
-      dataZoom: zoomOptions([0, 1]).map((option) => ({ ...option, minValueSpan: 0, start: start / Math.max(1, end) * 100, end: 100, ...(option.type === 'slider' ? { left: 76, right: 24 } : {}) })),
+      dataZoom: zoomOptions([0, 1]).map((option) => ({ ...option, minValueSpan: 0, start: start / Math.max(1, end) * 100, end: 100, ...(option.type === 'slider' ? { left: 76, right: 84 } : {}) })),
       series: [
         { id: 'candles', name: `${intervalNames[state.interval]} K`, type: 'candlestick', xAxisIndex: 0, yAxisIndex: 0, barMaxWidth: 22,
           data: bars.map((d) => [d.open, d.close, d.low, d.high]),
@@ -170,23 +172,21 @@
   function updateDailyScale() {
     const [start, end] = state.dailyRange;
     const bars = state.bars, base = bars[start].close;
-    const usePercent = state.scale === 'percent' && base > 0;
-    const convert = (value) => usePercent ? math.percentFrom(value, base) : value;
     const bounds = math.priceBounds(bars, start, end);
     const last = bars[end];
     const axisDecimals = Math.min(8, Math.max(3, Math.ceil(-Math.log10(Math.max(bounds.max - bounds.min, 1e-8))) + 1));
+    const percentLabel = (value) => percent(math.percentFrom(value, base));
     state.charts.daily.setOption({
-      yAxis: [{ name: usePercent ? '区间涨跌 / %' : '价格 / HK', min: convert(bounds.min), max: convert(bounds.max), axisLabel: { ...axisStyle.axisLabel, fontSize: 11, formatter: (value) => usePercent ? `${number(value, 4)}%` : number(value, axisDecimals) } }, {}],
-      series: [{ id: 'candles', data: bars.map((d) => [d.open, d.close, d.low, d.high].map(convert)), markLine: { silent: true, symbol: ['none', 'none'], lineStyle: { color: '#85998d', type: 'dashed', width: 1 }, label: { position: 'insideEndTop', formatter: `末收 ${usePercent ? percent(convert(last.close)) : price(last.close)}`, color: '#547060', fontSize: 10 }, data: [{ yAxis: convert(last.close) }] } }],
+      yAxis: [
+        { name: '价格 / HK', min: bounds.min, max: bounds.max, axisLabel: { ...axisStyle.axisLabel, fontSize: 11, formatter: (value) => number(value, axisDecimals) } },
+        {},
+        { min: bounds.min, max: bounds.max, axisLabel: { ...axisStyle.axisLabel, fontSize: 11, formatter: percentLabel }, axisPointer: { label: { formatter: ({ value }) => percentLabel(value) } } },
+      ],
+      series: [{ id: 'candles', markLine: { precision: 8, silent: true, symbol: ['none', 'none'], lineStyle: { color: '#85998d', type: 'dashed', width: 1 }, label: { position: 'insideEndTop', formatter: `末收 ${price(last.close)}`, color: '#547060', fontSize: 10 }, data: [{ yAxis: last.close }] } }],
     });
-    $('scale-basis').textContent = usePercent
-      ? `0% 基准：${bars[start].dateLabel}收盘 ${price(base)} HK；缩放或平移后随区间起点变化。`
-      : state.scale === 'percent' ? '区间起点收盘价为 0，无法计算百分比；当前显示 HK 价格。' : 'HK 价格轴随可见区间自动缩放。虚线为区间最后一根收盘价。';
-    document.querySelectorAll('[data-daily-scale]').forEach((button) => {
-      const active = button.dataset.dailyScale === state.scale;
-      button.classList.toggle('active', active);
-      button.setAttribute('aria-pressed', String(active));
-    });
+    $('scale-basis').textContent = base > 0
+      ? `左轴：价格 / HK；右轴：相对 ${bars[start].dateLabel}收盘 ${price(base)} HK 的涨跌百分比（0% 基准）。缩放或平移后基准随区间起点变化。`
+      : '左轴：价格 / HK；区间起点收盘价为 0，右轴百分比无法计算，显示 —。';
   }
 
   function selectDay(index, reveal = false) {
@@ -340,7 +340,6 @@
       $('range-error').hidden = true;
       rebuildDailyChart();
     }));
-    document.querySelectorAll('[data-daily-scale]').forEach((button) => button.addEventListener('click', () => { state.scale = button.dataset.dailyScale; updateDailyScale(); }));
     document.querySelectorAll('[data-price-scale]').forEach((button) => button.addEventListener('click', () => {
       const separate = button.dataset.priceScale === 'separate';
       state.charts.price.setOption({
