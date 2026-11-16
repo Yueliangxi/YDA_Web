@@ -138,8 +138,27 @@
       animation: false, textStyle: { fontFamily: 'sans-serif' },
       grid: [{ left: 76, right: 84, top: 32, height: '59%' }, { left: 76, right: 84, top: '73%', bottom: 72 }],
       axisPointer: { link: [{ xAxisIndex: 'all' }], lineStyle: { color: '#81958a', type: 'dashed' } },
-      // The quote panel stays above the plot on touch screens, without obscuring candles.
-      tooltip: { trigger: 'axis', showContent: false, axisPointer: { type: 'cross', crossStyle: { color: '#81958a', type: 'dashed' } } },
+      tooltip: {
+        ...tooltip, showContent: true, triggerOn: 'mousemove|click', transitionDuration: 0,
+        axisPointer: { type: 'cross', crossStyle: { color: '#81958a', type: 'dashed' } },
+        formatter(params) {
+          const point = params.find((item) => item.seriesId === 'candles') || params[0];
+          const d = bars[point?.dataIndex];
+          if (!d) return '';
+          const m = math.metrics(bars, point.dataIndex);
+          const rows = [
+            ['开盘', `${price(d.open)} HK`], ['最高', `${price(d.high)} HK`],
+            ['最低', `${price(d.low)} HK`], ['收盘', `${price(d.close)} HK`],
+            ['前收', m.previousClose == null ? '—' : `${price(m.previousClose)} HK`],
+            ['涨跌额', m.change == null ? '—' : `${signed(m.change, 8)} HK`],
+            ['涨跌幅（较前收）', percent(m.changePct)],
+            ['振幅', m.amplitudePct == null ? '—' : `${number(m.amplitudePct, 4)}%`],
+            ['成交量', `${number(d.volume, 8)} YDA`], ['成交额', `${number(d.turnover, 8)} HK`],
+            ['成交笔数', number(d.tradeCount, 0)],
+          ];
+          return `<div class="chart-tooltip kline-tooltip"><b>${escape(d.dateLabel)}${state.interval === 'day' ? '' : `<small>${escape(barDates(d))}</small>`}</b>${rows.map(([label, value]) => tooltipRow(label, value)).join('')}<span>${escape(d.status || '')}</span></div>`;
+        },
+      },
       xAxis: [{ ...xAxis, gridIndex: 0, axisLabel: { show: false }, axisLine: { show: false } }, { ...xAxis, gridIndex: 1 }],
       yAxis: [
         { ...axisStyle, type: 'value', gridIndex: 0, scale: true, splitNumber: 5, axisLine: { show: false }, nameTextStyle: { color: '#657b6e', fontSize: 11, align: 'left' }, axisPointer: { label: { backgroundColor: colors.price, formatter: ({ value }) => price(value) } } },

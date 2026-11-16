@@ -24,3 +24,5 @@
 @media(max-width:640px){.quote-head{gap:10px}.quote-label{display:none}#quote-close{font-size:24px}.quote-return strong{font-size:12px}.quote-head>div{gap:5px}}
 
 @media(max-width:360px){#daily .daily-values{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+.kline-tooltip{max-width:min(340px,calc(100vw - 90px));min-width:0;white-space:normal}.kline-tooltip b small{display:block;font-size:10px;font-weight:400;line-height:1.5;margin-top:3px}.kline-tooltip div{gap:12px}.kline-tooltip div>span{flex-shrink:0}.kline-tooltip em{text-align:right;overflow-wrap:anywhere}

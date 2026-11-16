@@ -7,10 +7,10 @@
   <meta name="description" content="YDA 模拟行情：按价格查看两类发行数量，缩放每日 K 线，浏览每一天的交易数据。">
   <title>YDA · 行情一览</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=20261115-dual-axis">
+  <link rel="stylesheet" href="./styles.css?v=20261116-hover">
   <script defer src="./vendor/echarts.min.js"></script>
-  <script defer src="./market-math.js?v=20261115-dual-axis"></script>
-  <script defer src="./app.js?v=20261115-dual-axis"></script>
+  <script defer src="./market-math.js?v=20261116-hover"></script>
+  <script defer src="./app.js?v=20261116-hover"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">跳转至行情</a>
@@ -58,7 +58,7 @@
           <dl class="daily-values" id="daily-values"></dl>
           <div class="day-status"><span id="daily-status"></span></div>
         </div>
-        <div id="daily-chart" class="chart daily-chart" role="img" aria-label="左轴 HK 价格、右轴涨跌百分比的开高低收 K 线及成交量图。滚轮或双指缩放、拖动平移，悬停或点击查看上方行情，也可用日期选择和前后按钮查看每根 K 线。"></div>
+        <div id="daily-chart" class="chart daily-chart" role="img" aria-label="左轴 HK 价格、右轴涨跌百分比的开高低收 K 线及成交量图。滚轮或双指缩放、拖动平移，悬停或点击显示详细行情提示，上方读数同步更新，也可用日期选择和前后按钮查看每根 K 线。"></div>
         <p id="scale-basis" class="scale-basis"></p>
         <div class="card-note"><span>涨跌幅 =（本根收盘 − 前收）÷ 前收；振幅 =（最高 − 最低）÷ 前收。无前收时显示 —。<br>阳线 / 阴线按本根收盘与开盘比较。周 K 从模拟起点每 7 天汇总；月 / 年沿用 Excel 模拟日历，末根可未满周期。</span><span class="gesture-hint">悬停 / 点击查看 · 双指缩放<br>拖动平移 · 底部滑块选择区间</span></div>
       </section>
