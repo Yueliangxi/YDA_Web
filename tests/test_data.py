@@ -117,13 +117,15 @@ class DataTests(unittest.TestCase):
         self.assertEqual(data.cell_text(shared, ["模拟日期（UTC）"]), "模拟日期（UTC）")
 
     def test_current_workbook_reconciles_and_preserves_source_rows(self):
-        sheets = data.read_sheets(data.DEFAULT_INPUT)
-        result = data.build(data.DEFAULT_INPUT)
-        source_dates = [row[0] for row in sheets["每日K线"] if data.DATE_PATTERN.fullmatch(row[0])]
-        self.assertEqual([row["dateLabel"] for row in result["daily"]], source_dates)
-        self.assertEqual(result["daily"][0]["close"], Decimal(sheets["每日K线"][1][1]))
-        self.assertEqual(result["daily"][-1]["day"], len(source_dates))
-        self.assertEqual(len(result["meta"]["sourceSha256"]), 64)
+        for source in data.discover_workbooks(data.WORKBOOKS):
+            with self.subTest(source=source.relative_to(data.WORKBOOKS).as_posix()):
+                sheets = data.read_sheets(source)
+                result = data.build(source)
+                source_dates = [row[0] for row in sheets["每日K线"] if data.DATE_PATTERN.fullmatch(row[0])]
+                self.assertEqual([row["dateLabel"] for row in result["daily"]], source_dates)
+                self.assertEqual(result["daily"][0]["close"], Decimal(sheets["每日K线"][1][1]))
+                self.assertEqual(result["daily"][-1]["day"], len(source_dates))
+                self.assertEqual(len(result["meta"]["sourceSha256"]), 64)
 
 
 if __name__ == "__main__":
