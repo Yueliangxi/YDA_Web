@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the source workbook and export chart data, using only Python's stdlib.
+"""Validate workbooks/ and build a chart catalog, using only Python's stdlib.
 
 The workbook remains the source of truth. Decimal arithmetic validates quantities
 before conversion to JavaScript-compatible JSON numbers for chart rendering.
@@ -12,16 +12,21 @@ import argparse
 from decimal import Decimal, InvalidOperation
 import hashlib
 import json
+import os
 from pathlib import Path
 import posixpath
 import re
+import shutil
 import sys
+import tempfile
 from xml.etree import ElementTree as ET
 from zipfile import BadZipFile, ZipFile
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_INPUT = ROOT / "YDA价格汇总与每日行情.xlsx"
+WORKBOOKS = ROOT / "workbooks"
+DEFAULT_INPUT = WORKBOOKS / "YDA价格汇总与每日行情.xlsx"
+DEFAULT_OUTPUT = ROOT / "data" / "market.json"
 NS = {"s": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
 REL_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 PACKAGE_REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
@@ -246,24 +251,172 @@ def parse_data(sheets: dict[str, list[list[str]]]) -> dict:
 
 def build(source: Path) -> dict:
     payload = parse_data(read_sheets(source))
-    payload["meta"].update(sourceFile=source.name, sourceSha256=hashlib.sha256(source.read_bytes()).hexdigest())
+    payload["meta"].update(sourceFile=source.name, sourceSha256=file_sha256(source))
+    return payload
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def write_json(path: Path, payload: dict) -> None:
+    with path.open("w", encoding="utf-8", newline="\n") as stream:
+        json.dump(payload, stream, ensure_ascii=False, separators=(",", ":"), allow_nan=False,
+                  default=lambda value: float(value) if isinstance(value, Decimal) else value)
+        stream.write("\n")
+
+
+def natural_path_key(path: str) -> tuple:
+    # Numeric segments compare as numbers; the exact path breaks case/zero ties.
+    parts = tuple((1, int(part)) if part.isdigit() else (0, part.casefold())
+                  for part in re.split(r"(\d+)", path))
+    return parts, path
+
+
+def discover_workbooks(directory: Path) -> list[Path]:
+    """Only visit the explicit public-source directory; never follow symlinks."""
+    if directory.is_symlink():
+        raise DataError(f"Workbook directory cannot be a symlink: {directory}")
+    found = []
+    def fail(error):
+        raise error
+    for parent, directories, names in os.walk(directory, followlinks=False, onerror=fail):
+        directories[:] = [name for name in directories if not name.startswith((".", "~$"))
+                          and not (Path(parent) / name).is_symlink()]
+        for name in names:
+            path = Path(parent) / name
+            if (not name.startswith((".", "~$")) and path.suffix.lower() == ".xlsx"
+                    and not path.is_symlink() and path.is_file()):
+                found.append(path)
+    found.sort(key=lambda path: natural_path_key(path.relative_to(directory).as_posix()))
+    if not found:
+        raise DataError(f"No .xlsx workbooks found in {directory}")
+    return found
+
+
+def dataset_id(relative_path: Path) -> str:
+    return "w-" + hashlib.sha256(relative_path.as_posix().encode("utf-8")).hexdigest()[:16]
+
+
+def workbook_description(source: Path, directory: Path) -> tuple[str | None, str | None]:
+    description = source.with_suffix(".md")
+    if description.is_symlink():
+        raise DataError(f"Cannot read description {directory.name}/{description.relative_to(directory).as_posix()}: symlinks are not supported")
+    try:
+        return description.read_text(encoding="utf-8-sig"), description.name
+    except FileNotFoundError:
+        return None, None
+    except (OSError, UnicodeError) as error:
+        raise DataError(f"Cannot read description {directory.name}/{description.relative_to(directory).as_posix()}: {error}") from error
+
+
+def remove_generated_path(path: Path) -> None:
+    if path.is_dir() and not path.is_symlink():
+        shutil.rmtree(path)
+    elif path.exists() or path.is_symlink():
+        path.unlink()
+
+
+def publish_catalog(staging: Path, output: Path) -> None:
+    """Install only our three generated artifacts, restoring all on a failed swap."""
+    existed = output.exists()
+    output.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=f".{output.name}-backup-", dir=output.parent) as temporary:
+        backup = Path(temporary)
+        changed = []
+        try:
+            # Install the catalog last so its entries only name complete files.
+            for name in ("datasets", "market.json", "catalog.json"):
+                target = output / name
+                previous = backup / name if target.exists() or target.is_symlink() else None
+                if previous is not None:
+                    os.replace(target, previous)
+                changed.append((target, previous))
+                os.replace(staging / name, target)
+        except OSError:
+            for target, previous in reversed(changed):
+                remove_generated_path(target)
+                if previous is not None:
+                    os.replace(previous, target)
+            if not existed:
+                output.rmdir()
+            raise
+
+
+def build_catalog(directory: Path = WORKBOOKS, output: Path = ROOT / "data") -> dict:
+    """Stage each validated workbook separately before publishing the complete set."""
+    sources = discover_workbooks(directory)
+    preferred = directory / DEFAULT_INPUT.name
+    default_source = preferred if preferred in sources else sources[0]
+    default_id = dataset_id(default_source.relative_to(directory))
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=f".{output.name}-build-", dir=output.parent) as temporary:
+        staging = Path(temporary)
+        (staging / "datasets").mkdir()
+        entries, identities = [], set()
+        for source in sources:
+            relative = source.relative_to(directory)
+            identity = dataset_id(relative)
+            source_path = "workbooks/" + relative.as_posix()
+            if identity in identities:
+                raise DataError(f"Dataset ID collision for {source_path}")
+            identities.add(identity)
+            try:
+                payload = build(source)
+                description, description_file = workbook_description(source, directory)
+                payload["meta"].update(descriptionMarkdown=description, descriptionFile=description_file)
+                data_file = f"datasets/{identity}.json"
+                destination = staging / data_file
+                write_json(destination, payload)
+                meta = payload["meta"]
+                entries.append({
+                    "id": identity, "title": source.stem, "sourceFile": source.name,
+                    "sourcePath": source_path, "dataFile": data_file,
+                    "sourceSha256": meta["sourceSha256"], "dataSha256": file_sha256(destination),
+                    **{key: meta[key] for key in ("dayCount", "priceCount", "firstDate", "lastDate")},
+                })
+                # Keep only the small catalog entries while validating the next file.
+                del payload, meta
+            except (DataError, OSError, BadZipFile, KeyError, ET.ParseError, ValueError) as error:
+                raise DataError(f"Workbook {source_path}: {error}") from error
+        catalog = {"version": 1, "defaultId": default_id, "datasets": entries}
+        shutil.copyfile(staging / f"datasets/{default_id}.json", staging / "market.json")
+        write_json(staging / "catalog.json", catalog)
+        publish_catalog(staging, output)
+    return catalog
+
+
+def build_single(source: Path, output: Path) -> dict:
+    payload = build(source)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=f".{output.name}-build-", dir=output.parent) as temporary:
+        staging = Path(temporary) / output.name
+        write_json(staging, payload)
+        os.replace(staging, output)
     return payload
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", type=Path, default=DEFAULT_INPUT, help="Source .xlsx workbook")
-    parser.add_argument("--output", type=Path, default=ROOT / "data" / "market.json", help="Output JSON path")
+    parser.add_argument("--input", type=Path, help="Explicit single-workbook mode: source .xlsx")
+    parser.add_argument("--output", type=Path, help="Explicit single-workbook mode: output JSON path")
     args = parser.parse_args()
     try:
-        payload = build(args.input)
-        serialized = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), allow_nan=False, default=lambda value: float(value) if isinstance(value, Decimal) else value) + "\n"
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(serialized, encoding="utf-8")
-    except (DataError, OSError, BadZipFile, KeyError, ET.ParseError) as error:
-        print(f"Data export failed: {error}", file=sys.stderr)
+        if args.input is not None or args.output is not None:
+            source, destination = args.input or DEFAULT_INPUT, args.output or DEFAULT_OUTPUT
+            payload = build_single(source, destination)
+            print(f"Validated and exported {len(payload['prices'])} prices and {len(payload['daily'])} days to {destination}")
+        else:
+            catalog = build_catalog()
+            print(f"Validated and exported {len(catalog['datasets'])} workbooks to {ROOT / 'data' / 'catalog.json'}")
+    except (DataError, OSError, BadZipFile, KeyError, ET.ParseError, ValueError) as error:
+        source_note = f" ({args.input or DEFAULT_INPUT})" if args.input is not None or args.output is not None else ""
+        print(f"Data export failed{source_note}: {error}", file=sys.stderr)
         return 1
-    print(f"Validated and exported {len(payload['prices'])} prices and {len(payload['daily'])} days to {args.output}")
     return 0
 
 

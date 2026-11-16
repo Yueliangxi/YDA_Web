@@ -1,6 +1,6 @@
 # YDA 行情
 
-根据仓库内的 `YDA价格汇总与每日行情.xlsx` 生成的静态行情网页。
+根据 `workbooks/` 中的 Excel 自动生成的静态行情网页：每个 Excel 对应一个独立页面，顶部下拉菜单切换。与 Excel 同名的 Markdown 会显示在图表上方的「参数说明」区。
 
 网站地址：[YDA 行情](https://yueliangxi.github.io/YDA_Web/)。
 
@@ -28,50 +28,61 @@
 ```sh
 python3 scripts/build_data.py
 python3 -m unittest discover -s tests
-node --test tests/test_market_math.cjs
+node --test tests/test_*.cjs
 python3 -m http.server 8000
 ```
 
 打开 [本地预览](http://localhost:8000)。网页通过 HTTP 读取 JSON 数据，请通过本地服务器访问。
 
-## 更新行情
+## 添加文档和参数说明
 
-只更新数据时，不需要修改网页代码或手动编辑 JSON。
+把用于网页的文件放到 **`workbooks/`**，例如：
 
-1. 把新文件命名为 **`YDA价格汇总与每日行情.xlsx`**，覆盖仓库根目录的同名文件。不要只新增带 `2`、日期或其他后缀的文件；发布流程只读取这个固定文件名。
-2. 保留两个工作表「价格发行与成交」「每日K线」及其列结构、合计行。数据行数可以改变；上述「已挂」与「整批」两版表头均受支持。
-3. 将替换后的 Excel 提交并推送到 `main`。也可以在 [GitHub 仓库](https://github.com/Yueliangxi/YDA_Web) 上传同名文件并提交到 `main`，直接替换旧文件。
-4. 在仓库 [Actions](https://github.com/Yueliangxi/YDA_Web/actions) 中等最新的 **Deploy YDA market page** 显示绿色成功，再刷新网站。如仍看到旧数据，稍等后强制刷新。
+```text
+workbooks/
+  方案A.xlsx
+  方案A.md
+  方案B.xlsx
+  方案B.md
+```
 
-如果使用本地命令行，在仓库根目录执行：
+- 每个 `.xlsx` 自动成为一份独立行情页面，网页顶部按文件名切换，两个图表、数据表及参数说明一起更新。
+- 参数说明与 Excel **同目录、同名、只有扩展名不同**。例如 `方案A.xlsx` 配 `方案A.md`。Markdown 使用 UTF-8 编码，支持基本标题、段落、列表、粗体、代码块、表格及 HTTP(S) 链接。原始 HTML 作为文字显示，图片仅保留说明文字，数学公式按原文展示。
+- 参数说明在页面顶部默认展开。没有同名 Markdown 时，行情仍可使用，页面显示「暂未提供参数说明」。未配对的 `.md` 不会生成页面。
+- Excel 保留「价格发行与成交」「每日K线」两个工作表及其列结构、合计行；文件名可以自定义。支持子文件夹，忽略 Excel 的 `~$` 临时文件和隐藏文件。
+- `docs/` 是个人记录目录，不会被扫描或加入网站。
+
+将文件提交到 `main` 后，GitHub Actions 会重新验证并生成文档目录、各自的数据和参数说明，再发布网页：
 
 ```sh
-git add 'YDA价格汇总与每日行情.xlsx'
-git commit -m "Update market data"
+git add workbooks/
+git commit -m "Update market documents"
 git push origin main
 ```
 
-GitHub 发布时会自动重新生成 `data/market.json`，无需本地运行 Python。若要先在本地预览或同步本地 JSON，则运行：
+也可以在 GitHub 的 [`workbooks/` 文件夹](https://github.com/Yueliangxi/YDA_Web/tree/main/workbooks) 上传文件。等 [Actions](https://github.com/Yueliangxi/YDA_Web/actions) 中 **Deploy YDA market page** 成功后再刷新网页。
 
-```sh
-python3 scripts/build_data.py
-python3 -m unittest discover -s tests
-```
+更新某份行情时，覆盖其同名 Excel；只改说明时，提交同名 Markdown 即可。删除一份 Excel 后，它会从网页列表移除。每份文档的链接含 `?dataset=...`，网页「复制页面链接」可复制；覆盖同名文件不会改变链接，移动或重命名文件会生成新链接。旧链接找不到文件时会提示重新选择，不会静默打开另一份行情。
 
-GitHub Actions 会重新读取 Excel、验证数据，并自动部署网页。转换或测试失败会阻止本次发布，已发布的网站不受影响；打开失败的运行查看 **Generate and validate market data** 步骤的具体原因。手动运行 **Deploy YDA market page** 只会读取已经提交到 GitHub 的 Excel，不会读取电脑中尚未推送的文件。
+默认打开 `workbooks/YDA价格汇总与每日行情.xlsx`；若没有这个文件，则按文件名自然排序选择第一份。当前用于网页的 Excel 已移入 `workbooks/`，今后请在此目录更新。
+
+本地预览或同步生成数据仍运行 `python3 scripts/build_data.py`。所有文件验证成功后才更新输出；损坏的 Excel 或无法读取的说明会阻止本次发布并指出文件名，已发布的网站不受影响。命令行显式传入 `--input` / `--output` 时保留单文件导出用途，该模式不生成网页文档列表。
 
 ## GitHub Pages
 
 仓库的 **Settings → Pages → Build and deployment → Source** 使用 **GitHub Actions**。工作流位于 `.github/workflows/pages.yml`，部署到 `github-pages` 环境。
 
-发布产物只包含网页、JSON 数据、图表库和图标。Excel 保留在仓库用于后续生成数据，不复制到网站发布目录。
+发布产物只包含网页、JSON 数据（含参数说明）、图表库和图标。Excel 与 Markdown 源文件保留在仓库，不复制到网站发布目录。
 
 ## 文件与依赖
 
 - `index.html`、`styles.css`、`app.js`：网页结构、样式和交互。
 - `market-math.js`：K 线周期聚合、涨跌幅和价格范围计算（无依赖，测试使用 Node.js 18+）。
-- `scripts/build_data.py`：从 Excel 提取并校验数据。
-- `data/market.json`：网页读取的数据。
+- `markdown-view.js`：参数说明的基本 Markdown 渲染，无外部依赖。
+- `workbooks/`：用于网页的 Excel 及同名 Markdown。
+- `scripts/build_data.py`：逐份读取、校验并生成数据目录。
+- `data/catalog.json`、`data/datasets/`：文档目录与各自的数据。
+- `data/market.json`：默认文档的数据副本，用于单文件兼容与测试。
 - `tests/`：数据转换测试。
 - `vendor/`：本地保存的 Apache ECharts 6.1.0 及其 LICENSE、NOTICE，无需访问外部 CDN。
 

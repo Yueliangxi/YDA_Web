@@ -7,17 +7,18 @@
   <meta name="description" content="YDA 模拟行情：按价格查看两类发行数量，缩放每日 K 线，浏览每一天的交易数据。">
   <title>YDA · 行情一览</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=20261116-hover">
+  <link rel="stylesheet" href="./styles.css?v=20261116-documents">
   <script defer src="./vendor/echarts.min.js"></script>
-  <script defer src="./market-math.js?v=20261116-hover"></script>
-  <script defer src="./app.js?v=20261116-hover"></script>
+  <script defer src="./market-math.js?v=20261116-documents"></script>
+  <script defer src="./markdown-view.js?v=20261116-documents"></script>
+  <script defer src="./app.js?v=20261116-documents"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">跳转至行情</a>
   <header class="site-header">
     <div class="header-inner">
       <a class="brand" href="#" aria-label="YDA 行情首页"><span class="brand-symbol" aria-hidden="true"><i></i><i></i><i></i></span><b>YDA</b><span class="brand-caption">MARKET OVERVIEW</span></a>
-      <nav aria-label="页面导航"><a href="#distribution">发行分布</a><a href="#daily">每日行情 <span aria-hidden="true">↗</span></a></nav>
+      <nav aria-label="页面导航"><a href="#documents">切换文档</a><a href="#distribution">发行分布</a><a href="#daily">每日行情 <span aria-hidden="true">↗</span></a></nav>
     </div>
   </header>
   <main id="main">
@@ -25,9 +26,19 @@
       <div><div class="eyebrow"><span class="status-dot"></span> YDA / HK <span class="tag">模拟行情</span></div><h1 id="page-title">行情一览<span>Market overview</span></h1></div>
       <p id="data-coverage" class="coverage">正在读取行情数据…</p>
     </section>
+    <section class="dataset-panel" id="documents" aria-label="选择行情文档" hidden>
+      <div class="dataset-choice"><label for="dataset-select">行情文档</label><select id="dataset-select" aria-describedby="dataset-detail"></select><span id="dataset-detail" role="status"></span></div>
+      <div class="dataset-link"><button id="copy-page-link" type="button">复制页面链接</button><span id="copy-status" role="status"></span></div>
+    </section>
+    <p id="dataset-loading" class="dataset-loading" role="status" hidden>正在读取文档…</p>
     <div id="load-error" class="error" role="alert" hidden></div>
+    <button id="retry-load" type="button" hidden>重新读取</button>
     <noscript><p class="error">请启用 JavaScript 以查看交互图表。</p></noscript>
     <div id="dashboard" hidden>
+      <section class="parameter-panel" aria-labelledby="parameter-title">
+        <div class="parameter-heading"><div><span class="section-kicker">DOCUMENT NOTES</span><h2 id="parameter-title">参数说明</h2></div><span id="parameter-source"></span></div>
+        <div id="parameter-content" class="markdown-content"></div>
+      </section>
       <section class="summary-grid" aria-label="行情概况">
         <article class="summary-card primary-summary"><p>最新收盘价 <span id="latest-date"></span></p><div class="metric"><strong id="latest-close">—</strong><span>HK</span></div><div id="latest-change" class="metric-note"></div></article>
         <article class="summary-card"><p>累计成交量 <span class="tiny-label">全部日期</span></p><div class="metric"><strong id="total-volume">—</strong><span>YDA</span></div><div class="metric-note" id="day-count"></div></article>
@@ -64,7 +75,7 @@
       </section>
 
       <details class="data-table-section" id="data-table"><summary><span>每日数据表 <small>精确数值，按当前图表区间显示</small></span><span class="details-icon" aria-hidden="true">+</span></summary><div class="table-toolbar"><span id="table-count"></span><button id="download-csv" type="button">下载当前区间 CSV ↓</button></div><div class="table-scroll" tabindex="0" role="region" aria-label="可横向滚动的每日数据表"><table><thead><tr><th scope="col">模拟日期</th><th scope="col">开盘 / HK</th><th scope="col">最高 / HK</th><th scope="col">最低 / HK</th><th scope="col">收盘 / HK</th><th scope="col">日涨跌幅</th><th scope="col">成交量 / YDA</th><th scope="col">成交额 / HK</th><th scope="col">成交笔数</th></tr></thead><tbody id="table-body"></tbody></table></div><div class="table-pagination"><button type="button" id="table-prev">上一页</button><span id="table-page"></span><button type="button" id="table-next">下一页</button></div></details>
-      <footer><div><b>YDA</b><span>价格以 HK 计 · 数量以 YDA 计</span></div><span>数据来源：YDA价格汇总与每日行情.xlsx</span></footer>
+      <footer><div><b>YDA</b><span>价格以 HK 计 · 数量以 YDA 计</span></div><span id="source-file">数据来源：—</span></footer>
     </div>
   </main>
 </body>

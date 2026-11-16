@@ -15,7 +15,7 @@
   const axisNumber = (value) => Math.abs(value) >= 1e8 ? `${number(value / 1e8, 1)}亿` : Math.abs(value) >= 1e4 ? `${number(value / 1e4, 1)}万` : number(value, 0);
   const escape = (text) => String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const tooltipRow = (label, value) => `<div><span>${label}</span><em>${value}</em></div>`;
-  const state = { data: null, charts: {}, dailyRange: [0, 0], priceRange: [0, 0], selectedDay: 0, selectedPrice: 0, page: 0, bars: [], interval: 'day' };
+  const state = { data: null, charts: {}, dailyRange: [0, 0], priceRange: [0, 0], selectedDay: 0, selectedPrice: 0, page: 0, bars: [], interval: 'day', catalog: null, dataset: null, requestId: 0, controller: null };
   const pageSize = 25;
 
   const tooltip = {
@@ -57,7 +57,7 @@
     $('day-count').textContent = `${number(volume)} YDA · ${number(daily.length, 0)} 天`;
     $('total-issued').textContent = compact(issued);
     $('price-count').textContent = `${number(issued)} YDA · ${prices.length} 个价格档位`;
-    if (state.data.meta?.issuanceDescription) $('issuance-basis').textContent = state.data.meta.issuanceDescription;
+    $('issuance-basis').textContent = state.data.meta?.issuanceDescription || '发行量按源表价格归集，实际成交量按真实成交价统计。';
   }
 
   function renderPriceChart() {
@@ -319,7 +319,8 @@
     const url = URL.createObjectURL(new Blob(['\uFEFF', rows.map((row) => row.map(csvCell).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a');
     link.href = url;
-    link.download = `YDA_第${start + 1}至${end + 1}天.csv`;
+    const filename = (state.dataset?.title || 'YDA').replace(/[\\/:*?"<>|]/g, '_');
+    link.download = `${filename}_第${start + 1}至${end + 1}天.csv`;
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
@@ -338,7 +339,7 @@
     });
     card.classList.toggle('expanded', expanded);
     document.body.classList.toggle('has-expanded', expanded);
-    document.querySelectorAll('.site-header, .intro, .summary-grid, .chart-card, .data-table-section, footer').forEach((element) => {
+    document.querySelectorAll('.site-header, .intro, .dataset-panel, .parameter-panel, .summary-grid, .chart-card, .data-table-section, footer').forEach((element) => {
       element.inert = expanded && element !== card;
     });
     const button = card.querySelector('[data-expand]');
@@ -424,26 +425,149 @@
     observer.observe($('daily-chart'));
   }
 
-  async function init() {
+  function clearCurrentDataset() {
+    const expanded = document.querySelector('.chart-card.expanded');
+    if (expanded) toggleExpand(expanded.id);
+    Object.values(state.charts).forEach((chart) => chart.dispose());
+    state.charts = {};
+    Object.assign(state, { data: null, dataset: null, bars: [], quoteBar: null, interval: 'day', selectedDay: 0, selectedPrice: 0, page: 0, dailyRange: [0, 0], priceRange: [0, 0] });
+    $('dashboard').hidden = true;
+    $('data-table').open = false;
+    $('table-body').replaceChildren();
+    $('range-error').hidden = true;
+    $('parameter-content').replaceChildren();
+    $('parameter-source').textContent = '';
+    $('copy-status').textContent = '';
+    $('copy-page-link').disabled = true;
+    document.querySelectorAll('[data-series]').forEach((button) => button.setAttribute('aria-pressed', 'true'));
+    document.querySelectorAll('[data-price-scale]').forEach((button) => {
+      const active = button.dataset.priceScale === 'separate';
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
+    $('scale-description').textContent = '左轴看发行，右轴看成交';
+    $('price-axis-note').textContent = '两色柱读左轴，蓝线读右轴。左右刻度不同；切换统一刻度可比较实际数量大小。';
+  }
+
+  function showLoadError(message) {
+    $('dashboard').hidden = true;
+    $('dataset-loading').hidden = true;
+    $('load-error').hidden = false;
+    $('load-error').textContent = message;
+    $('retry-load').hidden = false;
+    $('data-coverage').textContent = '行情暂时无法显示';
+    $('dataset-detail').textContent = '读取失败，可选择其他文档或重试';
+  }
+
+  async function loadDataset(id) {
+    const requestId = ++state.requestId;
+    state.controller?.abort();
+    state.controller = new AbortController();
+    clearCurrentDataset();
+    $('load-error').hidden = true;
+    $('retry-load').hidden = true;
+    const entry = state.catalog.datasets.find((dataset) => dataset.id === id);
+    $('dataset-select').value = entry?.id || '';
+    if (!entry) {
+      document.title = '文档不存在 · YDA';
+      showLoadError('这个链接对应的文档不存在或已被移除，请在上方选择其他行情文档。');
+      return;
+    }
+    $('dataset-loading').hidden = false;
+    $('dataset-loading').textContent = `正在读取 ${entry.title}…`;
+    $('dataset-detail').textContent = entry.sourceFile;
+    $('data-coverage').textContent = '正在读取行情数据…';
+    document.title = `${entry.title} · YDA 行情`;
     try {
-      if (!math) throw new Error('行情计算模块未能加载，请刷新页面重试。');
-      if (!window.echarts) throw new Error('图表库未能加载，请刷新页面重试。');
-      const response = await fetch('./data/market.json');
+      const url = new URL(`./data/${entry.dataFile}`, location.href);
+      url.searchParams.set('v', entry.dataSha256);
+      const response = await fetch(url, { signal: state.controller.signal });
       if (!response.ok) throw new Error(`行情数据读取失败（${response.status}）。`);
-      state.data = await response.json();
-      if (!state.data.prices?.length || !state.data.daily?.length) throw new Error('行情数据为空。');
+      const data = await response.json();
+      if (requestId !== state.requestId) return;
+      if (!data.prices?.length || !data.daily?.length) throw new Error('行情数据为空。');
+      state.data = data;
+      state.dataset = entry;
       $('dashboard').hidden = false;
+      $('dataset-loading').hidden = true;
+      $('dataset-detail').textContent = `${number(data.daily.length, 0)} 天 · ${number(data.prices.length, 0)} 个价格档位 · ${state.catalog.datasets.length} 份文档`;
+      $('source-file').textContent = `数据来源：${entry.sourcePath}`;
+      $('parameter-source').textContent = data.meta.descriptionFile || entry.sourceFile;
+      $('parameter-content').innerHTML = data.meta.descriptionMarkdown?.trim()
+        ? window.YDAMarkdown.render(data.meta.descriptionMarkdown)
+        : '<p class="empty-notes">该文档暂未提供参数说明。</p>';
       setupSummary();
       renderPriceChart();
       renderDailyChart();
-      bindControls();
+      $('copy-page-link').disabled = false;
     } catch (error) {
-      $('dashboard').hidden = true;
-      $('data-coverage').textContent = '行情暂时无法显示';
-      $('load-error').hidden = false;
-      $('load-error').textContent = `${error.message} 请确认网页通过 HTTP 服务打开，并检查网络后重试。`;
+      if (requestId !== state.requestId || error.name === 'AbortError') return;
+      clearCurrentDataset();
+      showLoadError(`${entry.title}：${error.message} 请重试或选择其他文档。`);
       console.error(error);
     }
+  }
+
+  function requestedDataset() {
+    return new URL(location.href).searchParams.get('dataset') ?? state.catalog.defaultId;
+  }
+
+  async function loadCatalog() {
+    $('load-error').hidden = true;
+    $('retry-load').hidden = true;
+    $('dataset-loading').hidden = false;
+    $('dataset-loading').textContent = '正在读取文档目录…';
+    try {
+      const response = await fetch('./data/catalog.json', { cache: 'no-cache' });
+      if (!response.ok) throw new Error(`文档目录读取失败（${response.status}）。`);
+      const catalog = await response.json();
+      if (!catalog.datasets?.length || !catalog.datasets.some((entry) => entry.id === catalog.defaultId)) throw new Error('没有可显示的行情文档。');
+      state.catalog = catalog;
+      $('dataset-select').replaceChildren(...catalog.datasets.map((entry) => {
+        const duplicateTitle = catalog.datasets.some((other) => other !== entry && other.title === entry.title);
+        return new Option(duplicateTitle ? `${entry.title}（${entry.sourcePath}）` : entry.title, entry.id);
+      }));
+      $('documents').hidden = false;
+      await loadDataset(requestedDataset());
+    } catch (error) {
+      showLoadError(`${error.message} 请刷新页面或稍后重试。`);
+      console.error(error);
+    }
+  }
+
+  async function init() {
+    if (!math || !window.echarts || !window.YDAMarkdown) {
+      showLoadError('网页模块未能加载，请刷新页面重试。');
+      $('retry-load').addEventListener('click', () => location.reload());
+      return;
+    }
+    bindControls();
+    $('dataset-select').addEventListener('change', () => {
+      const id = $('dataset-select').value;
+      const url = new URL(location.href);
+      url.searchParams.set('dataset', id);
+      history.pushState({ dataset: id }, '', url);
+      loadDataset(id);
+    });
+    window.addEventListener('popstate', () => { if (state.catalog) loadDataset(requestedDataset()); });
+    $('retry-load').addEventListener('click', () => state.catalog ? loadDataset(requestedDataset()) : loadCatalog());
+    $('copy-page-link').addEventListener('click', async () => {
+      if (!state.dataset) return;
+      const id = state.dataset.id;
+      const requestId = state.requestId;
+      const url = new URL(location.href);
+      url.searchParams.set('dataset', id);
+      try {
+        await navigator.clipboard.writeText(url.href);
+        if (state.requestId !== requestId) return;
+        $('copy-status').textContent = '页面链接已复制';
+      } catch {
+        if (state.requestId !== requestId) return;
+        history.replaceState({ dataset: id }, '', url);
+        $('copy-status').textContent = '请复制浏览器地址栏中的链接';
+      }
+    });
+    await loadCatalog();
   }
 
   init();
