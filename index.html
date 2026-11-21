@@ -11,7 +11,7 @@
   <script defer src="./vendor/echarts.min.js"></script>
   <script defer src="./market-math.js?v=20261116-documents"></script>
   <script defer src="./markdown-view.js?v=20261116-documents"></script>
-  <script defer src="./app.js?v=20261121-chart-defaults"></script>
+  <script defer src="./app.js?v=20261121-year-k"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">跳转至行情</a>
@@ -55,9 +55,9 @@
       </section>
 
       <section class="chart-card" id="daily" aria-labelledby="daily-title">
-        <div class="card-heading"><div><div class="section-kicker">02 / MARKET CHART</div><h2 id="daily-title">日 K 行情</h2><p>切换周期看趋势，缩放后查看每一根 K 线。</p></div><div class="chart-tools" aria-label="K 线图缩放"><button type="button" data-chart="daily" data-action="out" aria-label="缩小 K 线图">−</button><button type="button" data-chart="daily" data-action="in" aria-label="放大 K 线图">+</button><button type="button" data-chart="daily" data-action="reset">重置</button><button type="button" data-expand="daily" aria-label="展开每日 K 线图">⤢</button></div></div>
+        <div class="card-heading"><div><div class="section-kicker">02 / MARKET CHART</div><h2 id="daily-title">年 K 行情</h2><p>切换周期看趋势，缩放后查看每一根 K 线。</p></div><div class="chart-tools" aria-label="K 线图缩放"><button type="button" data-chart="daily" data-action="out" aria-label="缩小 K 线图">−</button><button type="button" data-chart="daily" data-action="in" aria-label="放大 K 线图">+</button><button type="button" data-chart="daily" data-action="reset">重置</button><button type="button" data-expand="daily" aria-label="展开 K 线图">⤢</button></div></div>
         <div class="market-toolbar">
-          <div class="periods interval-switch" role="group" aria-label="K 线周期"><button type="button" data-interval="day" class="active" aria-pressed="true">日 K</button><button type="button" data-interval="week" aria-pressed="false">周 K</button><button type="button" data-interval="month" aria-pressed="false">月 K</button><button type="button" data-interval="year" aria-pressed="false">年 K</button></div>
+          <div class="periods interval-switch" role="group" aria-label="K 线周期"><button type="button" data-interval="day" aria-pressed="false">日 K</button><button type="button" data-interval="week" aria-pressed="false">周 K</button><button type="button" data-interval="month" aria-pressed="false">月 K</button><button type="button" data-interval="year" class="active" aria-pressed="true">年 K</button></div>
           <div class="legend"><span><i class="swatch up"></i>阳线</span><span><i class="swatch down"></i>阴线</span><span><i class="swatch flat"></i>平盘</span></div>
         </div>
         <div class="window-toolbar"><span>显示范围</span><div class="periods" role="group" aria-label="显示 K 线数量"><button type="button" data-period="30" aria-pressed="false">近 30 根</button><button type="button" data-period="60" aria-pressed="false">近 60 根</button><button type="button" data-period="90" aria-pressed="false">近 90 根</button><button type="button" data-period="all" class="active" aria-pressed="true">全部</button></div></div>
@@ -65,7 +65,7 @@
         <p id="range-error" class="field-error" role="alert" hidden></p>
         <div class="daily-inspector">
           <div class="inspector-heading"><div class="inspector-title"><h3>当前 K 线</h3><span id="selected-day-number" class="tiny-label"></span></div><div class="day-navigation"><button type="button" id="prev-day" aria-label="上一根 K 线">←</button><select id="day-select" aria-label="选择查看日期"></select><button type="button" id="next-day" aria-label="下一根 K 线">→</button></div></div>
-          <div class="quote-head"><div><span class="quote-label">收盘</span><strong id="quote-close">—</strong><small>HK</small></div><div class="quote-return"><strong id="quote-change">—</strong><span id="quote-comparison">较前一日收盘</span></div></div>
+          <div class="quote-head"><div><span class="quote-label">收盘</span><strong id="quote-close">—</strong><small>HK</small></div><div class="quote-return"><strong id="quote-change">—</strong><span id="quote-comparison">较前一年收盘</span></div></div>
           <dl class="daily-values" id="daily-values"></dl>
           <div class="day-status"><span id="daily-status"></span></div>
         </div>

@@ -10,12 +10,13 @@
   const signed = (value, decimals = 4) => value == null ? '—' : `${value > 0 ? '+' : ''}${number(value, decimals)}`;
   const percent = (value) => value == null ? '—' : `${signed(value)}%`;
   const trend = (value) => value > 0 ? 'positive' : value < 0 ? 'negative' : '';
+  const defaultInterval = 'year';
   const intervalNames = { day: '日', week: '周', month: '月', year: '年' };
   const compact = (value) => Math.abs(value) >= 1e8 ? `${number(value / 1e8)} 亿` : Math.abs(value) >= 1e4 ? `${number(value / 1e4)} 万` : number(value);
   const axisNumber = (value) => Math.abs(value) >= 1e8 ? `${number(value / 1e8, 1)}亿` : Math.abs(value) >= 1e4 ? `${number(value / 1e4, 1)}万` : number(value, 0);
   const escape = (text) => String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const tooltipRow = (label, value) => `<div><span>${label}</span><em>${value}</em></div>`;
-  const state = { data: null, charts: {}, dailyRange: [0, 0], priceRange: [0, 0], selectedDay: 0, selectedPrice: 0, page: 0, bars: [], interval: 'day', catalog: null, dataset: null, requestId: 0, controller: null };
+  const state = { data: null, charts: {}, dailyRange: [0, 0], priceRange: [0, 0], selectedDay: 0, selectedPrice: 0, page: 0, bars: [], interval: defaultInterval, catalog: null, dataset: null, requestId: 0, controller: null };
   const pageSize = 25;
 
   const tooltip = {
@@ -335,7 +336,7 @@
       const button = other.querySelector('[data-expand]');
       button.setAttribute('aria-expanded', 'false');
       button.textContent = '⤢';
-      button.setAttribute('aria-label', other.id === 'daily' ? '展开每日 K 线图' : '展开价格发行图');
+      button.setAttribute('aria-label', other.id === 'daily' ? '展开 K 线图' : '展开价格发行图');
     });
     card.classList.toggle('expanded', expanded);
     document.body.classList.toggle('has-expanded', expanded);
@@ -435,7 +436,7 @@
     if (expanded) toggleExpand(expanded.id);
     Object.values(state.charts).forEach((chart) => chart.dispose());
     state.charts = {};
-    Object.assign(state, { data: null, dataset: null, bars: [], quoteBar: null, interval: 'day', selectedDay: 0, selectedPrice: 0, page: 0, dailyRange: [0, 0], priceRange: [0, 0] });
+    Object.assign(state, { data: null, dataset: null, bars: [], quoteBar: null, interval: defaultInterval, selectedDay: 0, selectedPrice: 0, page: 0, dailyRange: [0, 0], priceRange: [0, 0] });
     $('dashboard').hidden = true;
     $('data-table').open = false;
     $('table-body').replaceChildren();
