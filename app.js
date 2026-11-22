@@ -119,6 +119,9 @@
   }
 
   function renderDailyChart() {
+    state.annualReturns = math.annualReturns(state.data.daily);
+    state.annualRange = null;
+    state.charts.annual = echarts.init($('annual-chart'), null, { renderer: 'canvas' });
     const chart = state.charts.daily = echarts.init($('daily-chart'), null, { renderer: 'canvas' });
     chart.on('datazoom', () => syncRange('daily'));
     chart.on('updateAxisPointer', (event) => {
@@ -258,6 +261,35 @@
     return [state.bars[state.dailyRange[0]].startIndex, state.bars[state.dailyRange[1]].endIndex];
   }
 
+  function updateAnnualChart() {
+    const [start, end] = rawDailyRange();
+    const firstYear = state.data.daily[start].year, lastYear = state.data.daily[end].year;
+    if (state.annualRange?.[0] === firstYear && state.annualRange[1] === lastYear) return;
+    state.annualRange = [firstYear, lastYear];
+    const years = state.annualReturns.filter((row) => row.year >= firstYear && row.year <= lastYear);
+    const labels = years.map((row) => `第${row.year}年${row.partial ? '（未满）' : ''}`);
+    state.charts.annual.setOption({
+      animation: false,
+      grid: { left: 76, right: 84, top: 12, bottom: 28 },
+      xAxis: { ...axisStyle, type: 'category', data: labels, splitLine: { show: false },
+        axisLine: { onZero: false, lineStyle: { color: '#dfe5d9' } } },
+      yAxis: { ...axisStyle, type: 'value', splitNumber: 3,
+        axisLabel: { ...axisStyle.axisLabel, formatter: (value) => `${number(value, 4)}%` } },
+      tooltip: { ...tooltip, triggerOn: 'mousemove|click', axisPointer: { type: 'shadow' },
+        formatter(params) {
+          const index = params[0]?.dataIndex, row = years[index];
+          if (!row) return '';
+          const baseline = row.startIndex === 0 ? '首日开盘' : '上年末收盘';
+          return `<div class="chart-tooltip"><b>${escape(labels[index])} · ${percent(row.changePct)}</b>${tooltipRow(baseline, price(row.basePrice) + ' HK')}${tooltipRow(escape(state.data.daily[row.endIndex].dateLabel) + ' 收盘', price(row.close) + ' HK')}</div>`;
+        } },
+      series: [{ id: 'annual-return', name: '年度价格涨跌幅', type: 'bar', barMaxWidth: 22, barMinHeight: 1,
+        data: years.map((row) => ({ value: row.changePct, itemStyle: {
+          color: row.changePct > 0 ? colors.up : row.changePct < 0 ? colors.down : colors.flat,
+        } })) }],
+    }, true);
+    $('annual-chart').setAttribute('aria-label', years.map((row, i) => `${labels[i]} ${percent(row.changePct)}`).join('，'));
+  }
+
   function rangeFromChart(kind) {
     const zoom = state.charts[kind].getOption().dataZoom[0];
     const count = kind === 'price' ? state.data.prices.length : state.bars.length;
@@ -275,6 +307,7 @@
     $('range-end').value = range[1];
     $('daily-range').textContent = `显示 ${number(range[1] - range[0] + 1, 0)} / ${number(state.bars.length, 0)} 根${intervalNames[state.interval]} K`;
     updateDailyScale();
+    updateAnnualChart();
     document.querySelectorAll('[data-period]').forEach((button) => {
       const count = button.dataset.period === 'all' ? state.bars.length : Number(button.dataset.period);
       const active = range[1] === state.bars.length - 1 && (button.dataset.period === 'all' ? range[0] === 0 : count < state.bars.length && range[0] === state.bars.length - count);
@@ -443,6 +476,7 @@
     const observer = new ResizeObserver(() => Object.values(state.charts).forEach((chart) => chart.resize()));
     observer.observe($('price-chart'));
     observer.observe($('daily-chart'));
+    observer.observe($('annual-chart'));
   }
 
   function clearCurrentDataset() {

@@ -91,6 +91,27 @@
     return Number.isFinite(result) ? result : null;
   }
 
+  /** First year starts at its opening price; subsequent years start at the previous close. */
+  function annualReturns(daily) {
+    if (!Array.isArray(daily)) throw new TypeError('daily must be an array');
+    const years = [];
+    let startIndex = 0;
+    for (let endIndex = 0; endIndex < daily.length; endIndex++) {
+      const last = daily[endIndex];
+      if (daily[endIndex + 1]?.year === last.year) continue;
+      const first = daily[startIndex];
+      const basePrice = startIndex === 0 ? first.open : daily[startIndex - 1].close;
+      const partial = first.month !== 1 || first.dayOfMonth !== 1 ||
+        last.month !== 12 || last.dayOfMonth !== 31 || (last.status || '').includes('当日未结束');
+      years.push({
+        year: last.year, startIndex, endIndex, basePrice, close: last.close,
+        changePct: percentFrom(last.close, basePrice), partial,
+      });
+      startIndex = endIndex + 1;
+    }
+    return years;
+  }
+
   /** Change/amplitude use the preceding bar, even when it is outside the viewport. */
   function metrics(bars, index) {
     const result = { previousClose: null, change: null, changePct: null, amplitudePct: null, intrabarPct: null };
@@ -129,5 +150,5 @@
     return { min: Math.max(0, minimum - padding), max: Math.min(Number.MAX_VALUE, maximum + padding) };
   }
 
-  return Object.freeze({ buildBars, metrics, percentFrom, priceBounds });
+  return Object.freeze({ annualReturns, buildBars, metrics, percentFrom, priceBounds });
 });

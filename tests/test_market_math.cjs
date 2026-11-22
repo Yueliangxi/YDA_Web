@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const { buildBars, metrics, percentFrom, priceBounds } = require('../market-math.js');
+const { annualReturns, buildBars, metrics, percentFrom, priceBounds } = require('../market-math.js');
 
 function row(day, overrides = {}) {
   const result = { open: 10, high: 12, low: 9, close: 11, volume: 2, turnover: 22,
@@ -21,7 +21,7 @@ function approximately(actual, expected, tolerance = 1e-12) {
 test('loads as both CommonJS and a dependency-free defer-script global', () => {
   const context = vm.createContext({});
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'market-math.js'), 'utf8'), context);
-  assert.deepEqual(Object.keys(context.YDAMarketMath).sort(), ['buildBars', 'metrics', 'percentFrom', 'priceBounds']);
+  assert.deepEqual(Object.keys(context.YDAMarketMath).sort(), ['annualReturns', 'buildBars', 'metrics', 'percentFrom', 'priceBounds']);
   assert.equal(context.YDAMarketMath.percentFrom(11, 10), 10);
   assert.equal(globalThis.YDAMarketMath.buildBars, buildBars);
 });
@@ -107,6 +107,27 @@ test('first bar has no invented previous close while its intrabar move remains a
     previousClose: null, change: null, changePct: null, amplitudePct: null, intrabarPct: null,
   });
   assert.equal(metrics([], 0).previousClose, null);
+});
+
+test('annual returns use the first opening price and then each preceding year-end close', () => {
+  const daily = [
+    row(1, { open: 100, close: 110 }), row(365, { month: 12, dayOfMonth: 31, close: 120 }),
+    row(366, { year: 2, dayOfMonth: 1, open: 140 }), row(730, { year: 2, month: 12, dayOfMonth: 31, close: 90 }),
+    row(731, { year: 3, month: 1, dayOfMonth: 1, close: 90, volume: 0 }),
+  ];
+  assert.deepEqual(annualReturns(daily), [
+    { year: 1, startIndex: 0, endIndex: 1, basePrice: 100, close: 120, changePct: 20, partial: false },
+    { year: 2, startIndex: 2, endIndex: 3, basePrice: 120, close: 90, changePct: -25, partial: false },
+    { year: 3, startIndex: 4, endIndex: 4, basePrice: 90, close: 90, changePct: 0, partial: true },
+  ]);
+  assert.deepEqual(annualReturns([]), []);
+});
+
+test('partial-year returns are unannualized and a zero baseline has no percentage', () => {
+  const daily = [row(1, { open: 0, close: 9 }),
+    row(365, { month: 12, dayOfMonth: 31, close: 10, status: '无成交；当日未结束' }),
+    row(366, { year: 2, dayOfMonth: 1, close: 11 })];
+  assert.deepEqual(annualReturns(daily).map((bar) => [bar.changePct, bar.partial]), [[null, true], [10, true]]);
 });
 
 test('gap changes compare with preceding close, independently from the candle body', () => {
