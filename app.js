@@ -110,6 +110,14 @@
     return d.startIndex === d.endIndex ? first.dateLabel : `${first.dateLabel} — ${last.dateLabel}`;
   }
 
+  const inlineCoefficientLimit = 6;
+
+  function coefficientSummary(path) {
+    if (!path?.length) return '报表未提供';
+    if (path.length <= inlineCoefficientLimit) return path.join(' → ');
+    return `期初 ${path[0]}，期末 ${path[path.length - 1]}，共变化 ${path.length - 1} 次`;
+  }
+
   function renderDailyChart() {
     const chart = state.charts.daily = echarts.init($('daily-chart'), null, { renderer: 'canvas' });
     chart.on('datazoom', () => syncRange('daily'));
@@ -156,6 +164,7 @@
             ['振幅', m.amplitudePct == null ? '—' : `${number(m.amplitudePct, 4)}%`],
             ['成交量', `${number(d.volume, 8)} YDA`], ['成交额', `${number(d.turnover, 8)} HK`],
             ['成交笔数', number(d.tradeCount, 0)],
+            ['修正系数', escape(coefficientSummary(d.coefficientPath))],
           ];
           return `<div class="chart-tooltip kline-tooltip"><b>${escape(d.dateLabel)}${state.interval === 'day' ? '' : `<small>${escape(barDates(d))}</small>`}</b>${rows.map(([label, value]) => tooltipRow(label, value)).join('')}<span>${escape(d.status || '')}</span></div>`;
         },
@@ -212,6 +221,7 @@
   function selectDay(index, reveal = false) {
     const d = state.bars[index];
     if (!d || (state.quoteBar === d && !reveal)) return;
+    if (state.quoteBar !== d) $('coefficient-details').open = false;
     state.quoteBar = d;
     state.selectedDay = index;
     const m = math.metrics(state.bars, index);
@@ -226,6 +236,10 @@
     $('next-day').disabled = index === state.bars.length - 1;
     const values = [['开盘', price(d.open), 'HK'], ['最高', price(d.high), 'HK'], ['最低', price(d.low), 'HK'], ['前收', price(m.previousClose), 'HK'], ['涨跌幅', percent(m.changePct), '', trend(m.change)], ['振幅', m.amplitudePct == null ? '—' : `${number(m.amplitudePct, 4)}%`, ''], ['成交量', compact(d.volume), 'YDA'], ['成交额', compact(d.turnover), 'HK']];
     $('daily-values').innerHTML = values.map(([label, value, unit, cls]) => `<div><dt>${label}</dt><dd class="${cls || ''}">${value}<small>${unit}</small></dd></div>`).join('');
+    $('coefficient-value').textContent = coefficientSummary(d.coefficientPath);
+    const details = $('coefficient-details');
+    details.hidden = !(d.coefficientPath?.length > inlineCoefficientLimit);
+    $('coefficient-history').textContent = details.hidden ? '' : d.coefficientPath.join(' → ');
     $('daily-status').textContent = `${d.status || ''} · ${number(d.tradeCount, 0)} 笔`;
     if ($('data-table').open) {
       document.querySelectorAll('#table-body tr').forEach((row) => {

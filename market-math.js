@@ -32,12 +32,26 @@
     return `第${row.year}年`;
   }
 
+  function addCoefficientPath(bar, daily) {
+    const path = [];
+    for (let index = bar.startIndex; index <= bar.endIndex; index++) {
+      const raw = daily[index].adjustmentCoefficient;
+      if (raw == null) return bar;
+      for (const token of String(raw).split('→')) {
+        const value = token.trim().replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+        if (value !== path[path.length - 1]) path.push(value);
+      }
+    }
+    bar.coefficientPath = path;
+    return bar;
+  }
+
   /** Input is the validated, chronological daily array. Both indices are inclusive. */
   function buildBars(daily, interval = 'day') {
     if (!Array.isArray(daily)) throw new TypeError('daily must be an array');
     if (!intervals.has(interval)) throw new RangeError(`Unsupported interval: ${interval}`);
     if (interval === 'day') {
-      return daily.map((row, index) => ({ ...row, startIndex: index, endIndex: index }));
+      return daily.map((row, index) => addCoefficientPath({ ...row, startIndex: index, endIndex: index }, daily));
     }
     const bars = [];
     let key, current, totals;
@@ -45,7 +59,7 @@
       if (!current) return;
       for (const field of sumFields) current[field] = totals[field].value + totals[field].correction;
       current.status = current.volume > 0 ? '实际成交' : '无成交，沿用前收盘';
-      bars.push(current);
+      bars.push(addCoefficientPath(current, daily));
     }
     daily.forEach((row, index) => {
       const nextKey = bucket(row, interval);

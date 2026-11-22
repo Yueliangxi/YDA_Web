@@ -72,6 +72,21 @@ test('weeks use simulation day rather than array offsets or the year boundary', 
   assert.deepEqual(gap.map((bar) => bar.startIndex), [0, 1, 2]);
 });
 
+test('coefficient paths keep intraday and midnight changes across each selected period', () => {
+  const daily = [
+    row(365, { month: 12, dayOfMonth: 31, adjustmentCoefficient: '1.00 → 1.2 → 1' }),
+    row(366, { year: 2, dayOfMonth: 1, volume: 0, tradeCount: 0, adjustmentCoefficient: '1.0 → 0' }),
+    row(367, { year: 2, dayOfMonth: 2, adjustmentCoefficient: '0.00 → 0.000001' }),
+  ];
+  const paths = (interval) => buildBars(daily, interval).map((bar) => bar.coefficientPath);
+  assert.deepEqual(paths('day'), [['1', '1.2', '1'], ['1', '0'], ['0', '0.000001']]);
+  assert.deepEqual(paths('week'), [['1', '1.2', '1', '0', '0.000001']]);
+  for (const interval of ['month', 'year']) {
+    assert.deepEqual(paths(interval), [['1', '1.2', '1'], ['1', '0', '0.000001']]);
+  }
+  assert.equal(buildBars([row(1), row(2, { adjustmentCoefficient: '10' })], 'week')[0].coefficientPath, undefined);
+});
+
 test('months and years use the supplied simulation calendar and preserve inclusive source ranges', () => {
   const input = [row(365, { year: 1, month: 12, dayOfMonth: 31 }),
     row(366, { year: 2, month: 1, dayOfMonth: 1 }),

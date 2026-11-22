@@ -7,11 +7,11 @@
   <meta name="description" content="YDA 模拟行情：按价格查看两类发行数量，缩放每日 K 线，浏览每一天的交易数据。">
   <title>YDA · 行情一览</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=20261116-documents">
+  <link rel="stylesheet" href="./styles.css?v=20261122-coefficients">
   <script defer src="./vendor/echarts.min.js"></script>
-  <script defer src="./market-math.js?v=20261116-documents"></script>
+  <script defer src="./market-math.js?v=20261122-coefficients"></script>
   <script defer src="./markdown-view.js?v=20261116-documents"></script>
-  <script defer src="./app.js?v=20261121-year-k"></script>
+  <script defer src="./app.js?v=20261122-coefficients"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">跳转至行情</a>
@@ -67,6 +67,14 @@
           <div class="inspector-heading"><div class="inspector-title"><h3>当前 K 线</h3><span id="selected-day-number" class="tiny-label"></span></div><div class="day-navigation"><button type="button" id="prev-day" aria-label="上一根 K 线">←</button><select id="day-select" aria-label="选择查看日期"></select><button type="button" id="next-day" aria-label="下一根 K 线">→</button></div></div>
           <div class="quote-head"><div><span class="quote-label">收盘</span><strong id="quote-close">—</strong><small>HK</small></div><div class="quote-return"><strong id="quote-change">—</strong><span id="quote-comparison">较前一年收盘</span></div></div>
           <dl class="daily-values" id="daily-values"></dl>
+          <div class="coefficient-info">
+            <span>修正系数</span>
+            <span id="coefficient-value"></span>
+            <details id="coefficient-details" hidden>
+              <summary>查看完整变化</summary>
+              <p id="coefficient-history"></p>
+            </details>
+          </div>
           <div class="day-status"><span id="daily-status"></span></div>
         </div>
         <div id="daily-chart" class="chart daily-chart" role="img" aria-label="左轴 HK 价格、右轴涨跌百分比的开高低收 K 线及成交量图。滚轮或双指缩放、拖动平移，悬停或点击显示详细行情提示，上方读数同步更新，也可用日期选择和前后按钮查看每根 K 线。"></div>

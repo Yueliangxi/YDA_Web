@@ -57,6 +57,41 @@ class CatalogTests(unittest.TestCase):
         self.sources.mkdir()
         self.output = self.root / "data"
 
+    def test_imports_daily_coefficients_and_original_nine_column_workbooks_together(self):
+        workbook(self.sources / "original.xlsx")
+        sheets = fixture()
+        daily = sheets["每日K线"]
+        daily[0].append("调整系数")
+        daily[1].append("10.00  →  10.200000 → 10.00")
+        daily[2].append("0")
+        workbook(self.sources / "coefficients.xlsx", sheets)
+
+        catalog = data.build_catalog(self.sources, self.output)
+        imported = {}
+        for entry in catalog["datasets"]:
+            payload = json.loads((self.output / entry["dataFile"]).read_text())
+            imported[entry["sourceFile"]] = payload["daily"]
+        with_coefficients = imported["coefficients.xlsx"]
+        self.assertEqual([row.pop("adjustmentCoefficient") for row in with_coefficients],
+                         ["10.00  →  10.200000 → 10.00", "0"])
+        self.assertEqual(with_coefficients, imported["original.xlsx"])
+
+        daily[0][-1] = "未知列"
+        with self.assertRaisesRegex(data.DataError, "Unexpected column headers in 每日K线"):
+            data.build(workbook(self.sources / "unknown.xlsx", sheets))
+
+    def test_requires_nonnegative_finite_daily_coefficient_values_if_column_is_present(self):
+        for invalid in (None, "", "10 → ", "10 → → 11", "10 → -0.2", "NaN", "Infinity", "无"):
+            with self.subTest(invalid=invalid):
+                sheets = fixture()
+                rows = sheets["每日K线"]
+                rows[0].append("调整系数")
+                rows[1].append("10")
+                if invalid is not None:
+                    rows[2].append(invalid)
+                with self.assertRaisesRegex(data.DataError, "第1年 01月02日 调整系数"):
+                    data.build(workbook(self.sources / "invalid.xlsx", sheets))
+
     def test_discovers_only_visible_workbooks_naturally_without_following_links(self):
         for name in ("方案10.xlsx", "方案2.xlsx", "nested/中文 空格#&.XLSX"):
             workbook(self.sources / name)
