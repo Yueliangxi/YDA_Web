@@ -32,17 +32,20 @@
     return `第${row.year}年`;
   }
 
-  function addCoefficientPath(bar, daily) {
+  function addIssuanceHistory(bar, daily) {
+    const isWindow = daily[bar.startIndex].issueWindowDays != null;
+    const field = isWindow ? 'issueWindowDays' : 'adjustmentCoefficient';
     const path = [];
     for (let index = bar.startIndex; index <= bar.endIndex; index++) {
-      const raw = daily[index].adjustmentCoefficient;
+      const raw = daily[index][field];
       if (raw == null) return bar;
       for (const token of String(raw).split('→')) {
         const value = token.trim().replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
         if (value !== path[path.length - 1]) path.push(value);
       }
     }
-    bar.coefficientPath = path;
+    if (isWindow) bar.issueWindowPath = path;
+    else bar.coefficientPath = path;
     return bar;
   }
 
@@ -51,7 +54,7 @@
     if (!Array.isArray(daily)) throw new TypeError('daily must be an array');
     if (!intervals.has(interval)) throw new RangeError(`Unsupported interval: ${interval}`);
     if (interval === 'day') {
-      return daily.map((row, index) => addCoefficientPath({ ...row, startIndex: index, endIndex: index }, daily));
+      return daily.map((row, index) => addIssuanceHistory({ ...row, startIndex: index, endIndex: index }, daily));
     }
     const bars = [];
     let key, current, totals;
@@ -59,7 +62,7 @@
       if (!current) return;
       for (const field of sumFields) current[field] = totals[field].value + totals[field].correction;
       current.status = current.volume > 0 ? '实际成交' : '无成交，沿用前收盘';
-      bars.push(addCoefficientPath(current, daily));
+      bars.push(addIssuanceHistory(current, daily));
     }
     daily.forEach((row, index) => {
       const nextKey = bucket(row, interval);

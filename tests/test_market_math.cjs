@@ -87,6 +87,18 @@ test('coefficient paths keep intraday and midnight changes across each selected 
   assert.equal(buildBars([row(1), row(2, { adjustmentCoefficient: '10' })], 'week')[0].coefficientPath, undefined);
 });
 
+test('new issue-window bars preserve the order of changes across a no-trade day', () => {
+  const daily = [
+    row(1, { issueWindowDays: '75→76→75' }),
+    row(2, { issueWindowDays: '75→74', volume: 0, tradeCount: 0 }),
+    row(3, { issueWindowDays: 74 }),
+  ];
+  const [bar] = buildBars(daily, 'week');
+  assert.deepEqual(bar.issueWindowPath, ['75', '76', '75', '74']);
+  assert.equal(bar.coefficientPath, undefined);
+  assert.deepEqual(buildBars(daily, 'day')[2].issueWindowPath, ['74']);
+});
+
 test('months and years use the supplied simulation calendar and preserve inclusive source ranges', () => {
   const input = [row(365, { year: 1, month: 12, dayOfMonth: 31 }),
     row(366, { year: 2, month: 1, dayOfMonth: 1 }),

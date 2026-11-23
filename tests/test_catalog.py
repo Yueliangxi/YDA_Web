@@ -57,7 +57,7 @@ class CatalogTests(unittest.TestCase):
         self.sources.mkdir()
         self.output = self.root / "data"
 
-    def test_imports_daily_coefficients_and_original_nine_column_workbooks_together(self):
+    def test_imports_window_coefficient_and_original_nine_column_workbooks_together(self):
         workbook(self.sources / "original.xlsx")
         sheets = fixture()
         daily = sheets["每日K线"]
@@ -65,6 +65,10 @@ class CatalogTests(unittest.TestCase):
         daily[1].append("10.00  →  10.200000 → 10.00")
         daily[2].append("0")
         workbook(self.sources / "coefficients.xlsx", sheets)
+        daily[0][-1] = "发行回看天数"
+        daily[1][-1] = "75→76→75"
+        daily[2][-1] = "75"
+        workbook(self.sources / "windows.xlsx", sheets)
 
         catalog = data.build_catalog(self.sources, self.output)
         imported = {}
@@ -75,6 +79,9 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual([row.pop("adjustmentCoefficient") for row in with_coefficients],
                          ["10.00  →  10.200000 → 10.00", "0"])
         self.assertEqual(with_coefficients, imported["original.xlsx"])
+        with_windows = imported["windows.xlsx"]
+        self.assertEqual([row.pop("issueWindowDays") for row in with_windows], ["75→76→75", "75"])
+        self.assertEqual(with_windows, imported["original.xlsx"])
 
         daily[0][-1] = "未知列"
         with self.assertRaisesRegex(data.DataError, "Unexpected column headers in 每日K线"):
@@ -90,6 +97,18 @@ class CatalogTests(unittest.TestCase):
                 if invalid is not None:
                     rows[2].append(invalid)
                 with self.assertRaisesRegex(data.DataError, "第1年 01月02日 调整系数"):
+                    data.build(workbook(self.sources / "invalid.xlsx", sheets))
+
+    def test_window_entries_are_positive_whole_days(self):
+        for invalid in (None, "75→", "75→0", "75→-1", "75→76.5", "NaN"):
+            with self.subTest(invalid=invalid):
+                sheets = fixture()
+                rows = sheets["每日K线"]
+                rows[0].append("发行回看天数")
+                rows[1].append("75")
+                if invalid is not None:
+                    rows[2].append(invalid)
+                with self.assertRaisesRegex(data.DataError, "第1年 01月02日 发行回看天数"):
                     data.build(workbook(self.sources / "invalid.xlsx", sheets))
 
     def test_discovers_only_visible_workbooks_naturally_without_following_links(self):

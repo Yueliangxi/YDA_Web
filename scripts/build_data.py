@@ -146,8 +146,12 @@ def parse_data(sheets: dict[str, list[list[str]]]) -> dict:
     expected_price_headers = PRICE_HEADERS.copy()
     expected_price_headers[1] = normalized_price_headers[1]
     require_headers(price_rows, expected_price_headers, "价格发行与成交")
-    has_coefficient = bool(daily_rows and len(daily_rows[0]) == len(DAILY_HEADERS) + 1)
-    daily_headers = [*DAILY_HEADERS, "调整系数"] if has_coefficient else DAILY_HEADERS
+    daily_headers = DAILY_HEADERS.copy()
+    history_header = ""
+    if daily_rows and len(daily_rows[0]) == len(DAILY_HEADERS) + 1:
+        history_header = re.sub(r"\s+", "", daily_rows[0][-1])
+        if history_header in ("发行回看天数", "调整系数"):
+            daily_headers.append(history_header)
     require_headers(daily_rows, daily_headers, "每日K线")
     price_keys = ["price", "issued", "priceHighIssued", "volumeHighIssued", "volume"]
     prices, daily, price_notes, daily_notes = [], [], [], []
@@ -227,10 +231,15 @@ def parse_data(sheets: dict[str, list[list[str]]]) -> dict:
             if any(point[key] != prior_close for key in ("open", "high", "low", "close")):
                 raise DataError(f"No-trade day does not carry previous close at {row[0]}")
         point.update(day=len(daily) + 1, year=year, month=month, dayOfMonth=day_of_month, dateLabel=row[0], status=row[8])
-        if has_coefficient:
-            for index, value in enumerate(row[9].split("→"), 1):
-                number(value.strip(), f"每日K线 {row[0]} 调整系数（第{index}项）")
-            point["adjustmentCoefficient"] = row[9]
+        if history_header:
+            is_window = history_header == "发行回看天数"
+            for index, token in enumerate(row[9].split("→"), 1):
+                label = f"每日K线 {row[0]} {history_header}（第{index}项）"
+                value = number(token.strip(), label, positive=is_window)
+                if is_window and value != value.to_integral_value():
+                    raise DataError(f"Expected whole days at {label}")
+            key = "issueWindowDays" if is_window else "adjustmentCoefficient"
+            point[key] = row[9]
         daily.append(point)
 
     if not prices or not daily or price_totals is None or daily_totals is None:

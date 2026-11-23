@@ -9,9 +9,9 @@
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css?v=20261122-annual-returns">
   <script defer src="./vendor/echarts.min.js"></script>
-  <script defer src="./market-math.js?v=20261122-annual-returns"></script>
+  <script defer src="./market-math.js?v=20261123-issue-window"></script>
   <script defer src="./markdown-view.js?v=20261116-documents"></script>
-  <script defer src="./app.js?v=20261122-annual-returns"></script>
+  <script defer src="./app.js?v=20261123-issue-window"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">跳转至行情</a>
@@ -68,7 +68,7 @@
           <div class="quote-head"><div><span class="quote-label">收盘</span><strong id="quote-close">—</strong><small>HK</small></div><div class="quote-return"><strong id="quote-change">—</strong><span id="quote-comparison">较前一年收盘</span></div></div>
           <dl class="daily-values" id="daily-values"></dl>
           <div class="coefficient-info">
-            <span>修正系数</span>
+            <span id="issuance-history-label">发行回看天数</span>
             <span id="coefficient-value"></span>
             <details id="coefficient-details" hidden>
               <summary>查看完整变化</summary>
