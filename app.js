@@ -47,6 +47,7 @@
     const latest = daily.at(-1);
     const volume = daily.reduce((sum, d) => sum + d.volume, 0);
     const issued = prices.reduce((sum, d) => sum + d.issued, 0);
+    const turnover = daily.reduce((sum, d) => sum + d.turnover, 0);
     $('data-coverage').textContent = `${daily[0].dateLabel} — ${latest.dateLabel} · 共 ${number(daily.length, 0)} 天`;
     $('latest-date').textContent = latest.dateLabel;
     $('latest-close').textContent = price(latest.close);
@@ -58,6 +59,8 @@
     $('day-count').textContent = `${number(volume)} YDA · ${number(daily.length, 0)} 天`;
     $('total-issued').textContent = compact(issued);
     $('price-count').textContent = `${number(issued)} YDA · ${prices.length} 个价格档位`;
+    $('turnover-per-issued').textContent = issued > 0 ? number(turnover / issued, 4) : '—';
+    $('turnover-total').textContent = `累计成交额 ${compact(turnover)} HKD`;
     $('issuance-basis').textContent = state.data.meta?.issuanceDescription || '发行量按源表价格归集，实际成交量按真实成交价统计。';
   }
 
