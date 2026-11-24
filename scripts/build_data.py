@@ -9,7 +9,8 @@ Simulation dates are labels; they must never be converted to real-world dates.
 from __future__ import annotations
 
 import argparse
-from decimal import Decimal, InvalidOperation
+from collections.abc import Iterable
+from decimal import MAX_PREC, Decimal, InvalidOperation, localcontext
 import hashlib
 import json
 import os
@@ -127,9 +128,14 @@ def require_headers(rows: list[list[str]], expected: list[str], sheet: str) -> N
         raise DataError(f"Unexpected column headers in {sheet}: {actual}")
 
 
+def exact_sum(values: Iterable[Decimal | int]) -> Decimal:
+    # Long simulations can exceed the default 28 digits before the last fractional unit.
+    with localcontext() as context:
+        context.prec = MAX_PREC
+        return sum(values, Decimal(0))
+
+
 def sum_check(actual: Decimal, expected: Decimal, label: str) -> None:
-    # All quantity cells and their source totals retain eight decimals. Check
-    # exactly, instead of hiding a missing row inside a floating-point tolerance.
     if actual != expected:
         raise DataError(f"Total mismatch for {label}: calculated {actual}, workbook {expected}")
 
@@ -173,7 +179,8 @@ def parse_data(sheets: dict[str, list[list[str]]]) -> dict:
         point = {key: number(row[index], f"价格发行与成交 row {row_number} {key}", positive=index == 0) for index, key in enumerate(price_keys)}
         if prices and point["price"] <= prices[-1]["price"]:
             raise DataError(f"Duplicate or unordered price at row {row_number}")
-        sum_check(point["priceHighIssued"] + point["volumeHighIssued"], point["issued"], f"issued components at price {point['price']}")
+        issued = exact_sum((point["priceHighIssued"], point["volumeHighIssued"]))
+        sum_check(issued, point["issued"], f"issued components at price {point['price']}")
         prices.append(point)
 
     last_date = None
@@ -245,9 +252,9 @@ def parse_data(sheets: dict[str, list[list[str]]]) -> dict:
     if not prices or not daily or price_totals is None or daily_totals is None:
         raise DataError("Both worksheets require data rows and their labeled total rows")
     for key, total in price_totals.items():
-        sum_check(sum(point[key] for point in prices), total, f"price {key}")
+        sum_check(exact_sum(point[key] for point in prices), total, f"price {key}")
     for key, total in daily_totals.items():
-        sum_check(sum(point[key] for point in daily), total, f"daily {key}")
+        sum_check(exact_sum(point[key] for point in daily), total, f"daily {key}")
     sum_check(price_totals["volume"], daily_totals["volume"], "volume across worksheets")
     return {
         "meta": {

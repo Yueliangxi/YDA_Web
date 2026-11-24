@@ -105,6 +105,18 @@ class DataTests(unittest.TestCase):
             with self.assertRaisesRegex(data.DataError, "Total mismatch"):
                 data.parse_data(sheets)
 
+    def test_large_turnover_reconciles_to_the_last_decimal_place(self):
+        sheets = fixture()
+        first, second, total = sheets["每日K线"][1:4]
+        first[2], first[6] = "9", "132771827458707114450131.766833"
+        second[2], second[6:9] = "1", ["0.000001", "1", "实际成交"]
+        total[6:8] = ["132771827458707114450131.766834", "3"]
+        data.parse_data(sheets)
+
+        total[6] = "132771827458707114450131.766833"
+        with self.assertRaisesRegex(data.DataError, "Total mismatch for daily turnover"):
+            data.parse_data(sheets)
+
     def test_rejects_missing_formula_cache(self):
         cell = ET.fromstring(f'<c xmlns="{data.NS["s"]}" r="A2"><f>1+1</f></c>')
         with self.assertRaisesRegex(data.DataError, "no cached value"):
