@@ -7,6 +7,10 @@
   const number = (value, decimals = 2) => Number(value).toLocaleString('en-US', { maximumFractionDigits: decimals });
   const price = (value) => value == null ? '—' : Number(value).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 8 });
   const math = window.YDAMarketMath;
+  const chartNumber = (value, decimals = 2, resolution) => Math.abs(value) >= 1000 ? math.compactNumber(value, resolution) : number(value, decimals);
+  const chartPrice = (value, resolution) => Math.abs(value) >= 1000 ? math.compactNumber(value, resolution) : price(value);
+  const chartSigned = (value, decimals = 4, resolution) => value == null ? '—' : `${value > 0 ? '+' : ''}${chartNumber(value, decimals, resolution)}`;
+  const chartPercent = (value, decimals = 4, resolution) => value == null ? '—' : `${chartSigned(value, decimals, resolution)}%`;
   const signed = (value, decimals = 4) => value == null ? '—' : `${value > 0 ? '+' : ''}${number(value, decimals)}`;
   const percent = (value) => value == null ? '—' : `${signed(value)}%`;
   const trend = (value) => value > 0 ? 'positive' : value < 0 ? 'negative' : '';
@@ -18,6 +22,16 @@
   const tooltipRow = (label, value) => `<div><span>${label}</span><em>${value}</em></div>`;
   const state = { data: null, charts: {}, dailyRange: [0, 0], priceRange: [0, 0], selectedDay: 0, selectedPrice: 0, page: 0, bars: [], interval: defaultInterval, catalog: null, dataset: null, requestId: 0, controller: null };
   const pageSize = 25;
+
+  function barPriceFormatter(bar, previousClose) {
+    const prices = [bar.low, bar.open, bar.close, bar.high, previousClose].filter(Number.isFinite).sort((a, b) => a - b);
+    let step = Infinity;
+    for (let i = 1; i < prices.length; i++) {
+      const gap = prices[i] - prices[i - 1];
+      if (gap > 0) step = Math.min(step, gap);
+    }
+    return (value) => chartPrice(value, step);
+  }
 
   const tooltip = {
     trigger: 'axis', confine: true, backgroundColor: '#fffffff5', borderColor: '#e3e9dc', borderWidth: 1,
@@ -50,16 +64,18 @@
     const turnover = daily.reduce((sum, d) => sum + d.turnover, 0);
     $('data-coverage').textContent = `${daily[0].dateLabel} — ${latest.dateLabel} · 共 ${number(daily.length, 0)} 天`;
     $('latest-date').textContent = latest.dateLabel;
-    $('latest-close').textContent = price(latest.close);
     const { change, changePct } = math.metrics(daily, daily.length - 1);
-    $('latest-change').textContent = `${percent(changePct)} 较前一日${latest.volume === 0 ? ' · 当日无成交' : ''}`;
+    $('latest-close').textContent = chartPrice(latest.close);
+    $('latest-close').title = `${price(latest.close)} HK`;
+    $('latest-change').textContent = `${chartPercent(changePct)} 较前一日${latest.volume === 0 ? ' · 当日无成交' : ''}`;
     $('latest-change').classList.toggle('positive', change > 0);
     $('latest-change').classList.toggle('negative', change < 0);
     $('total-volume').textContent = compact(volume);
     $('day-count').textContent = `${number(volume)} YDA · ${number(daily.length, 0)} 天`;
     $('total-issued').textContent = compact(issued);
     $('price-count').textContent = `${number(issued)} YDA · ${prices.length} 个价格档位`;
-    $('turnover-per-issued').textContent = issued > 0 ? number(turnover / issued, 4) : '—';
+    $('turnover-per-issued').textContent = issued > 0 ? chartNumber(turnover / issued, 4) : '—';
+    $('turnover-per-issued').title = issued > 0 ? `${number(turnover / issued, 4)} HKD/YDA` : '';
     $('turnover-total').textContent = `累计成交额 ${compact(turnover)} HKD`;
     $('issuance-basis').textContent = state.data.meta?.issuanceDescription || '发行量按源表价格归集，实际成交量按真实成交价统计。';
   }
@@ -165,15 +181,16 @@
           const d = bars[point?.dataIndex];
           if (!d) return '';
           const m = math.metrics(bars, point.dataIndex);
+          const quote = barPriceFormatter(d, m.previousClose);
           const rows = [
-            ['开盘', `${price(d.open)} HK`], ['最高', `${price(d.high)} HK`],
-            ['最低', `${price(d.low)} HK`], ['收盘', `${price(d.close)} HK`],
-            ['前收', m.previousClose == null ? '—' : `${price(m.previousClose)} HK`],
-            ['涨跌额', m.change == null ? '—' : `${signed(m.change, 8)} HK`],
-            ['涨跌幅（较前收）', percent(m.changePct)],
-            ['振幅', m.amplitudePct == null ? '—' : `${number(m.amplitudePct, 4)}%`],
-            ['成交量', `${number(d.volume, 8)} YDA`], ['成交额', `${number(d.turnover, 8)} HK`],
-            ['成交笔数', number(d.tradeCount, 0)],
+            ['开盘', `${quote(d.open)} HK`], ['最高', `${quote(d.high)} HK`],
+            ['最低', `${quote(d.low)} HK`], ['收盘', `${quote(d.close)} HK`],
+            ['前收', m.previousClose == null ? '—' : `${quote(m.previousClose)} HK`],
+            ['涨跌额', m.change == null ? '—' : `${chartSigned(m.change, 8)} HK`],
+            ['涨跌幅（较前收）', chartPercent(m.changePct)],
+            ['振幅', m.amplitudePct == null ? '—' : `${chartNumber(m.amplitudePct, 4)}%`],
+            ['成交量', `${chartNumber(d.volume, 8)} YDA`], ['成交额', `${chartNumber(d.turnover, 8)} HK`],
+            ['成交笔数', chartNumber(d.tradeCount, 0)],
             [historyLabel(d), escape(historySummary(d.issueWindowPath ?? d.coefficientPath))],
           ];
           return `<div class="chart-tooltip kline-tooltip"><b>${escape(d.dateLabel)}${state.interval === 'day' ? '' : `<small>${escape(barDates(d))}</small>`}</b>${rows.map(([label, value]) => tooltipRow(label, value)).join('')}<span>${escape(d.status || '')}</span></div>`;
@@ -181,8 +198,8 @@
       },
       xAxis: [{ ...xAxis, gridIndex: 0, axisLabel: { show: false }, axisLine: { show: false } }, { ...xAxis, gridIndex: 1 }],
       yAxis: [
-        { ...axisStyle, type: 'value', gridIndex: 0, scale: true, splitNumber: 5, axisLine: { show: false }, nameTextStyle: { color: '#657b6e', fontSize: 11, align: 'left' }, axisPointer: { label: { backgroundColor: colors.price, formatter: ({ value }) => price(value) } } },
-        { ...axisStyle, type: 'value', gridIndex: 1, name: '成交量 / YDA', nameTextStyle: { color: '#657b6e', fontSize: 11, align: 'left' }, splitNumber: 2, min: 0, axisLine: { show: false }, axisLabel: { ...axisStyle.axisLabel, formatter: axisNumber }, axisPointer: { label: { formatter: ({ value }) => number(value) } } },
+        { ...axisStyle, type: 'value', gridIndex: 0, scale: true, splitNumber: 5, axisLine: { show: false }, nameTextStyle: { color: '#657b6e', fontSize: 11, align: 'left' }, axisPointer: { label: { backgroundColor: colors.price } } },
+        { ...axisStyle, type: 'value', gridIndex: 1, name: '成交量 / YDA', nameTextStyle: { color: '#657b6e', fontSize: 11, align: 'left' }, splitNumber: 2, min: 0, axisLine: { show: false }, axisLabel: { ...axisStyle.axisLabel, formatter: (value) => chartNumber(value, 0) }, axisPointer: { label: { formatter: ({ value }) => chartNumber(value) } } },
         // The right axis shares the HK domain, so every price and percent label aligns.
         { ...axisStyle, type: 'value', gridIndex: 0, position: 'right', scale: true, splitNumber: 5, name: '区间涨跌 / %', nameTextStyle: { color: '#657b6e', fontSize: 11, align: 'right' }, axisLine: { show: false }, splitLine: { show: false }, axisPointer: { show: true, label: { backgroundColor: colors.price } } },
       ],
@@ -214,17 +231,22 @@
     const bounds = math.priceBounds(bars, start, end);
     const last = bars[end];
     const axisDecimals = Math.min(8, Math.max(3, Math.ceil(-Math.log10(Math.max(bounds.max - bounds.min, 1e-8))) + 1));
-    const percentLabel = (value) => percent(math.percentFrom(value, base));
+    const tickResolution = (bounds.max - bounds.min) / 12;
+    const percentStep = base > 0 ? tickResolution / base * 100 : 1;
+    const percentDecimals = Math.min(12, Math.max(4, -Math.floor(Math.log10(percentStep))));
+    const percentLabel = (value) => chartPercent(math.percentFrom(value, base), percentDecimals, percentStep);
     state.charts.daily.setOption({
       yAxis: [
-        { name: '价格 / HK', min: bounds.min, max: bounds.max, axisLabel: { ...axisStyle.axisLabel, fontSize: 11, formatter: (value) => number(value, axisDecimals) } },
+        { name: '价格 / HK', min: bounds.min, max: bounds.max,
+          axisLabel: { ...axisStyle.axisLabel, fontSize: 11, formatter: (value) => chartNumber(value, axisDecimals, tickResolution) },
+          axisPointer: { label: { formatter: ({ value }) => chartPrice(value, tickResolution) } } },
         {},
         { min: bounds.min, max: bounds.max, axisLabel: { ...axisStyle.axisLabel, fontSize: 11, formatter: percentLabel }, axisPointer: { label: { formatter: ({ value }) => percentLabel(value) } } },
       ],
-      series: [{ id: 'candles', markLine: { precision: 8, silent: true, symbol: ['none', 'none'], lineStyle: { color: '#85998d', type: 'dashed', width: 1 }, label: { position: 'insideEndTop', formatter: `末收 ${price(last.close)}`, color: '#547060', fontSize: 10 }, data: [{ yAxis: last.close }] } }],
+      series: [{ id: 'candles', markLine: { precision: 8, silent: true, symbol: ['none', 'none'], lineStyle: { color: '#85998d', type: 'dashed', width: 1 }, label: { position: 'insideEndTop', formatter: `末收 ${chartPrice(last.close, tickResolution)}`, color: '#547060', fontSize: 10 }, data: [{ yAxis: last.close }] } }],
     });
     $('scale-basis').textContent = base > 0
-      ? `左轴：价格 / HK；右轴：相对 ${bars[start].dateLabel}收盘 ${price(base)} HK 的涨跌百分比（0% 基准）。缩放或平移后基准随区间起点变化。`
+      ? `左轴：价格 / HK；右轴：相对 ${bars[start].dateLabel}收盘 ${chartPrice(base, tickResolution)} HK 的涨跌百分比（0% 基准）。缩放或平移后基准随区间起点变化。`
       : '左轴：价格 / HK；区间起点收盘价为 0，右轴百分比无法计算，显示 —。';
   }
 
@@ -235,16 +257,18 @@
     state.quoteBar = d;
     state.selectedDay = index;
     const m = math.metrics(state.bars, index);
+    const quote = barPriceFormatter(d, m.previousClose);
     $('day-select').value = index;
     $('selected-day-number').textContent = barDates(d);
-    $('quote-close').textContent = price(d.close);
+    $('quote-close').textContent = quote(d.close);
+    $('quote-close').title = `${price(d.close)} HK`;
     $('quote-close').className = trend(m.change);
-    $('quote-change').textContent = `${signed(m.change, 8)} HK / ${percent(m.changePct)}`;
+    $('quote-change').textContent = `${chartSigned(m.change, 8)} HK / ${chartPercent(m.changePct)}`;
     $('quote-change').className = trend(m.change);
     $('quote-comparison').textContent = `较前一${intervalNames[state.interval]}收盘`;
     $('prev-day').disabled = index === 0;
     $('next-day').disabled = index === state.bars.length - 1;
-    const values = [['开盘', price(d.open), 'HK'], ['最高', price(d.high), 'HK'], ['最低', price(d.low), 'HK'], ['前收', price(m.previousClose), 'HK'], ['涨跌幅', percent(m.changePct), '', trend(m.change)], ['振幅', m.amplitudePct == null ? '—' : `${number(m.amplitudePct, 4)}%`, ''], ['成交量', compact(d.volume), 'YDA'], ['成交额', compact(d.turnover), 'HK']];
+    const values = [['开盘', quote(d.open), 'HK'], ['最高', quote(d.high), 'HK'], ['最低', quote(d.low), 'HK'], ['前收', quote(m.previousClose), 'HK'], ['涨跌幅', chartPercent(m.changePct), '', trend(m.change)], ['振幅', m.amplitudePct == null ? '—' : `${chartNumber(m.amplitudePct, 4)}%`, ''], ['成交量', chartNumber(d.volume), 'YDA'], ['成交额', chartNumber(d.turnover), 'HK']];
     $('daily-values').innerHTML = values.map(([label, value, unit, cls]) => `<div><dt>${label}</dt><dd class="${cls || ''}">${value}<small>${unit}</small></dd></div>`).join('');
     const path = d.issueWindowPath ?? d.coefficientPath;
     $('issuance-history-label').textContent = historyLabel(d);
@@ -252,7 +276,7 @@
     const details = $('coefficient-details');
     details.hidden = !(path?.length > inlineHistoryLimit);
     $('coefficient-history').textContent = details.hidden ? '' : path.join(' → ');
-    $('daily-status').textContent = `${d.status || ''} · ${number(d.tradeCount, 0)} 笔`;
+    $('daily-status').textContent = `${d.status || ''} · ${chartNumber(d.tradeCount, 0)} 笔`;
     if ($('data-table').open) {
       document.querySelectorAll('#table-body tr').forEach((row) => {
         const day = Number(row.dataset.dayIndex);
@@ -283,13 +307,14 @@
       xAxis: { ...axisStyle, type: 'category', data: labels, splitLine: { show: false },
         axisLine: { onZero: false, lineStyle: { color: '#dfe5d9' } } },
       yAxis: { ...axisStyle, type: 'value', splitNumber: 3,
-        axisLabel: { ...axisStyle.axisLabel, formatter: (value) => `${number(value, 4)}%` } },
+        axisLabel: { ...axisStyle.axisLabel, formatter: (value) => `${chartNumber(value, 4)}%` } },
       tooltip: { ...tooltip, triggerOn: 'mousemove|click', axisPointer: { type: 'shadow' },
         formatter(params) {
           const index = params[0]?.dataIndex, row = years[index];
           if (!row) return '';
           const baseline = row.startIndex === 0 ? '首日开盘' : '上年末收盘';
-          return `<div class="chart-tooltip"><b>${escape(labels[index])} · ${percent(row.changePct)}</b>${tooltipRow(baseline, price(row.basePrice) + ' HK')}${tooltipRow(escape(state.data.daily[row.endIndex].dateLabel) + ' 收盘', price(row.close) + ' HK')}</div>`;
+          const step = Math.abs(row.close - row.basePrice);
+          return `<div class="chart-tooltip"><b>${escape(labels[index])} · ${chartPercent(row.changePct)}</b>${tooltipRow(baseline, chartPrice(row.basePrice, step) + ' HK')}${tooltipRow(escape(state.data.daily[row.endIndex].dateLabel) + ' 收盘', chartPrice(row.close, step) + ' HK')}</div>`;
         } },
       series: [{ id: 'annual-return', name: '年度价格涨跌幅', type: 'bar', barMaxWidth: 22, barMinHeight: 1,
         data: years.map((row) => ({ value: row.changePct, itemStyle: {

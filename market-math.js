@@ -10,6 +10,23 @@
   const intervals = new Set(['day', 'week', 'month', 'year']);
   const sumFields = ['volume', 'turnover', 'tradeCount'];
   const finite = (value) => typeof value === 'number' && Number.isFinite(value);
+  const compactFormats = new Map();
+
+  // A narrow price range can need more digits than a market-wide overview.
+  function compactNumber(value, resolution) {
+    if (!finite(value)) return '—';
+    let digits = 4;
+    if (value !== 0 && finite(resolution) && resolution > 0) {
+      const places = Math.ceil(Math.log10(Math.abs(value)) - Math.log10(resolution)) + 1;
+      digits = Math.min(16, Math.max(digits, places));
+    }
+    if (!compactFormats.has(digits)) {
+      compactFormats.set(digits, new Intl.NumberFormat('en-US', {
+        notation: 'compact', maximumSignificantDigits: digits,
+      }));
+    }
+    return compactFormats.get(digits).format(value);
+  }
 
   // Compensated sums avoid accumulating avoidable rounding drift over 30 years.
   // Inputs/outputs remain JavaScript numbers, as in data/market.json.
@@ -153,5 +170,5 @@
     return { min: Math.max(0, minimum - padding), max: Math.min(Number.MAX_VALUE, maximum + padding) };
   }
 
-  return Object.freeze({ annualReturns, buildBars, metrics, percentFrom, priceBounds });
+  return Object.freeze({ annualReturns, buildBars, compactNumber, metrics, percentFrom, priceBounds });
 });

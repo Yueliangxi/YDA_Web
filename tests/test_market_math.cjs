@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const { annualReturns, buildBars, metrics, percentFrom, priceBounds } = require('../market-math.js');
+const { annualReturns, buildBars, compactNumber, metrics, percentFrom, priceBounds } = require('../market-math.js');
 
 function row(day, overrides = {}) {
   const result = { open: 10, high: 12, low: 9, close: 11, volume: 2, turnover: 22,
@@ -21,9 +21,25 @@ function approximately(actual, expected, tolerance = 1e-12) {
 test('loads as both CommonJS and a dependency-free defer-script global', () => {
   const context = vm.createContext({});
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'market-math.js'), 'utf8'), context);
-  assert.deepEqual(Object.keys(context.YDAMarketMath).sort(), ['annualReturns', 'buildBars', 'metrics', 'percentFrom', 'priceBounds']);
+  assert.deepEqual(Object.keys(context.YDAMarketMath).sort(), ['annualReturns', 'buildBars', 'compactNumber', 'metrics', 'percentFrom', 'priceBounds']);
   assert.equal(context.YDAMarketMath.percentFrom(11, 10), 10);
   assert.equal(globalThis.YDAMarketMath.buildBars, buildBars);
+});
+
+test('compact market values use decimal units, preserve signs and promote at rounded boundaries', () => {
+  for (const [value, label] of [
+    [0, '0'], [0.00000001, '0.00000001'], [999.9, '999.9'], [1_000, '1K'],
+    [8_552.977, '8.553K'], [999_999, '1M'], [1_250_000, '1.25M'],
+    [-2_144_000, '-2.144M'], [1e9, '1B'], [2e12, '2T'],
+  ]) assert.equal(compactNumber(value), label);
+  for (const missing of [undefined, null, NaN, Infinity]) assert.equal(compactNumber(missing), '—');
+});
+
+test('narrow chart ranges distinguish adjacent prices within and across compact units', () => {
+  assert.deepEqual([1_000_001, 1_000_002].map(value => compactNumber(value, 1)),
+    ['1.000001M', '1.000002M']);
+  assert.deepEqual([999_999, 1_000_000].map(value => compactNumber(value, 1)),
+    ['999.999K', '1M']);
 });
 
 test('daily bars copy rows, retain zero-volume dates and never mutate the source', () => {
