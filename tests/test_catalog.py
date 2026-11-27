@@ -176,6 +176,17 @@ class CatalogTests(unittest.TestCase):
         data.build_catalog(self.sources, self.output)
         self.assertEqual(snapshot(self.output), before)
 
+    def test_workbook_circulation_is_exact_in_published_json(self):
+        sheets = fixture()
+        sheets["每日K线"][1][8] += "\n01:00 拆分　每 1 YDA 拆为 10 YDA"
+        qty = "267805606563.15804783"
+        sheets["流通量"] = [data.SUPPLY_HEADERS, ["1", "10", qty, "0", qty], ["2", "10", qty, "0", qty]]
+        workbook(self.sources / "拆分.xlsx", sheets)
+        data.build_catalog(self.sources, self.output)
+        payload = json.loads((self.output / "market.json").read_text())
+        self.assertEqual(payload["meta"]["circulatingSupply"], qty)
+        self.assertEqual(payload["daily"][-1]["splitFactor"], "10")
+
     def test_descriptions_pair_in_the_same_directory_and_markdown_only_change_refreshes_data_hash(self):
         for name in ("first/同名.xlsx", "second/同名.xlsx", "缺说明.xlsx"):
             workbook(self.sources / name)

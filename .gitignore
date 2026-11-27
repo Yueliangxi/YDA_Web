@@ -5,3 +5,4 @@ _site/
 node_modules/
 ~$*.xlsx
 /docs/
+/YDA本地行情.html

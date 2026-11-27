@@ -73,6 +73,60 @@ class DataTests(unittest.TestCase):
         self.assertEqual([first[key] for key in ("open", "close", "low", "high")], [Decimal("1"), Decimal("1.1"), Decimal("1"), Decimal("1.1")])
         self.assertEqual((second["day"], second["volume"], second["dateLabel"]), (2, Decimal("0"), "第1年 01月02日"))
 
+    def test_circulation_uses_settled_new_unit_balances_with_exact_decimals(self):
+        sheets = fixture()
+        split = "01:00 拆分　每 1 YDA 拆为 10 YDA，拆分前 100.000 HKD/YDA，拆分后参考价 10.000 HKD/YDA"
+        sheets["每日K线"][1][8] += "\n" + split + "\n" + split
+        sheets["流通量"] = [
+            data.SUPPLY_HEADERS,
+            ["1", "100", "999999999999999999999.00000001", "1", "999999999999999999998.00000001"],
+            ["2", "100", "999999999999999999999.00000001", "0", "999999999999999999999.00000001"],
+        ]
+        result = data.parse_data(sheets)
+        self.assertEqual(result["meta"]["circulatingSupply"], sheets["流通量"][2][4])
+        self.assertEqual(result["meta"]["splitFactor"], "100")
+        self.assertEqual(result["daily"][0]["circulatingSupply"], sheets["流通量"][1][4])
+        self.assertEqual(result["daily"][0]["volume"], 10)
+        self.assertIn("流通量", result["meta"]["sheetNames"])
+
+    def test_legacy_split_status_exposes_units_without_claiming_circulation(self):
+        sheets = fixture()
+        before = data.parse_data(sheets)
+        self.assertNotIn("circulatingSupply", before["meta"])
+        self.assertNotIn("splitFactor", before["daily"][0])
+        sheets["每日K线"][1][8] += "\n03:00 拆分　每 1 YDA 拆为 10 YDA，拆分前 10.000 HKD/YDA，拆分后参考价 1.000 HKD/YDA"
+        legacy = data.parse_data(sheets)
+        self.assertNotIn("circulatingSupply", legacy["meta"])
+        self.assertEqual([row["splitFactor"] for row in legacy["daily"]], ["10", "10"])
+        self.assertEqual(legacy["meta"]["splitFactor"], "10")
+
+    def test_unknown_circulation_is_distinct_from_zero_and_checked(self):
+        sheets = fixture()
+        sheets["流通量"] = [data.SUPPLY_HEADERS, ["1", "1", "2", "2", "0"], ["2", "1", "2", "3"]]
+        result = data.parse_data(sheets)
+        self.assertEqual([row["circulatingSupply"] for row in result["daily"]], ["0", None])
+        self.assertIsNone(result["meta"]["circulatingSupply"])
+        sheets["流通量"][2].append("0")
+        with self.assertRaisesRegex(data.DataError, "must be blank"):
+            data.parse_data(sheets)
+
+    def test_circulation_snapshots_must_reconcile_with_day_units_and_inventory(self):
+        for modified, message in (
+            (["3", "10", "33", "1", "32"], "simulation day"),
+            (["2", "10", "33", "1", "33"], "circulation"),
+            (["2", "10", "33", "1"], "Missing numeric value"),
+            (["2", "15", "33", "1", "32"], "split factor"),
+        ):
+            with self.subTest(modified=modified):
+                sheets = fixture()
+                sheets["流通量"] = [data.SUPPLY_HEADERS, ["1", "10", "30", "0", "30"], modified]
+                with self.assertRaisesRegex(data.DataError, message):
+                    data.parse_data(sheets)
+        sheets["流通量"][2] = ["2", "20", "33", "1", "32"]
+        sheets["每日K线"][2][8] += "\n05:00 拆分　每 1 YDA 拆为 10 YDA"
+        with self.assertRaisesRegex(data.DataError, "Total mismatch for split factor"):
+            data.parse_data(sheets)
+
     def test_rejects_missing_value_instead_of_inventing_zero(self):
         sheets = fixture()
         sheets["价格发行与成交"][1][2] = ""

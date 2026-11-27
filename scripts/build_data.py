@@ -34,6 +34,8 @@ PACKAGE_REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
 DATE_PATTERN = re.compile(r"第(\d+)年\s+(\d{1,2})月(\d{1,2})日")
 PRICE_HEADERS = ["价格HK/YDA", "发行量（已挂）YDA", "价格新高发行YDA", "成交量新高发行YDA", "成交量YDA"]
 DAILY_HEADERS = ["模拟日期（UTC）", "价格（收盘）HK/YDA", "成交量YDA", "开盘价HK/YDA", "最高价HK/YDA", "最低价HK/YDA", "成交额HK", "成交笔数", "状态"]
+SUPPLY_HEADERS = ["模拟日", "累计拆分倍数", "常规发行累计实售（YDA）", "发行方回购库存（YDA）", "当前流通量（YDA）"]
+SPLIT_RATIO = re.compile(r"拆分\s+每\s*1\s*YDA\s*拆为\s*([0-9]+)\s*YDA")
 PRICE_SCHEMAS = {
     "发行量（已挂）YDA": {
         "totalLabel": "已挂 / 成交合计",
@@ -93,7 +95,7 @@ def read_sheets(source: Path) -> dict[str, list[list[str]]]:
         result = {}
         for sheet in workbook.findall("s:sheets/s:sheet", NS):
             name = sheet.attrib["name"]
-            if name not in ("价格发行与成交", "每日K线"):
+            if name not in ("价格发行与成交", "每日K线", "流通量"):
                 continue
             target = targets[sheet.attrib[f"{{{REL_NS}}}id"]]
             path = target.lstrip("/") if target.startswith("/") else posixpath.normpath(posixpath.join("xl", target))
@@ -138,6 +140,52 @@ def exact_sum(values: Iterable[Decimal | int]) -> Decimal:
 def sum_check(actual: Decimal, expected: Decimal, label: str) -> None:
     if actual != expected:
         raise DataError(f"Total mismatch for {label}: calculated {actual}, workbook {expected}")
+
+
+def add_circulation(daily: list[dict], rows: list[list[str]] | None) -> dict:
+    """Keep unit conversion and already-adjusted stock separate from historical volumes."""
+    if rows is not None:
+        require_headers(rows, SUPPLY_HEADERS, "流通量")
+        if len(rows) != len(daily) + 1:
+            raise DataError("流通量 must have one row per simulation day")
+
+    factor = 1
+    for day in daily:
+        event_factor = 1
+        for match in SPLIT_RATIO.finditer(day["status"]):
+            ratio = int(match[1])
+            if ratio < 2:
+                raise DataError(f"Invalid split ratio at {day['dateLabel']}")
+            event_factor *= ratio
+        previous_factor = factor
+        factor *= event_factor
+        if rows is not None:
+            index = day["day"]
+            row = rows[index]
+            if not 4 <= len(row) <= 5 or number(row[0], "流通量 模拟日") != index:
+                raise DataError(f"Invalid 流通量 row for simulation day {index}")
+            reported = number(row[1], f"流通量 day {index} 累计拆分倍数", positive=True)
+            if reported != reported.to_integral_value() or int(reported) % previous_factor:
+                raise DataError(f"Invalid cumulative split factor at {day['dateLabel']}")
+            if event_factor != 1:
+                sum_check(reported, Decimal(factor), f"split factor at {day['dateLabel']}")
+            factor = int(reported)
+            sold = number(row[2], f"流通量 day {index} 常规发行累计实售")
+            inventory = number(row[3], f"流通量 day {index} 发行方回购库存")
+            net = exact_sum((sold, inventory.copy_negate()))
+            amount = row[4] if len(row) == 5 else ""
+            if net < 0:
+                if amount:
+                    raise DataError(f"Unknown circulation must be blank at {day['dateLabel']}")
+                day["circulatingSupply"] = None
+            else:
+                sum_check(number(amount, f"流通量 day {index} 当前流通量"), net, f"circulation at {day['dateLabel']}")
+                # JSON numbers cannot represent every Yan in large balances.
+                plain = format(net, "f")
+                day["circulatingSupply"] = plain.rstrip("0").rstrip(".") if "." in plain else plain
+        if rows is not None or factor != 1:
+            day["splitFactor"] = str(factor)
+    return {key: daily[-1][key] for key in ("circulatingSupply", "splitFactor") if key in daily[-1]}
 
 
 def parse_data(sheets: dict[str, list[list[str]]]) -> dict:
@@ -256,9 +304,11 @@ def parse_data(sheets: dict[str, list[list[str]]]) -> dict:
     for key, total in daily_totals.items():
         sum_check(exact_sum(point[key] for point in daily), total, f"daily {key}")
     sum_check(price_totals["volume"], daily_totals["volume"], "volume across worksheets")
+    supply = add_circulation(daily, sheets.get("流通量"))
     return {
         "meta": {
-            "sheetNames": ["价格发行与成交", "每日K线"],
+            "sheetNames": [name for name in ("价格发行与成交", "每日K线", "流通量") if name in sheets],
+            **supply,
             "priceUnit": "HK", "volumeUnit": "YDA", "turnoverUnit": "HK",
             "issuanceBasis": schema["basis"], "issuanceDescription": schema["description"],
             "isSimulation": True, "calendar": "simulation-year", "timezone": "UTC",

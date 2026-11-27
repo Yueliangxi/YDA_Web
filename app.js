@@ -3,6 +3,7 @@
 
 (() => {
   const $ = (id) => document.getElementById(id);
+  const offlineCatalog = $('offline-catalog');
   const colors = { price: '#245b4b', issued: '#d9bb70', traded: '#688fbd', up: '#218064', down: '#c76152', flat: '#98a29a', grid: '#edf0e8', label: '#8b9884' };
   const number = (value, decimals = 2) => Number(value).toLocaleString('en-US', { maximumFractionDigits: decimals });
   const price = (value) => value == null ? '—' : Number(value).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 8 });
@@ -22,6 +23,21 @@
   const tooltipRow = (label, value) => `<div><span>${label}</span><em>${value}</em></div>`;
   const state = { data: null, charts: {}, dailyRange: [0, 0], priceRange: [0, 0], selectedDay: 0, selectedPrice: 0, page: 0, bars: [], interval: defaultInterval, catalog: null, dataset: null, requestId: 0, controller: null };
   const pageSize = 25;
+
+  // Keep all eight quantity decimals, including when the integer exceeds Number.MAX_SAFE_INTEGER.
+  function exactQuantity(value) {
+    if (value == null) return '—';
+    const [whole, fraction = ''] = String(value).split('.');
+    const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    const digits = fraction.replace(/0+$/, '');
+    return digits ? grouped + '.' + digits : grouped;
+  }
+
+  function supplyUnit(row) {
+    if (row.splitFactor == null) return '';
+    if (String(row.splitFactor) === '1') return '尚未拆分';
+    return `1 个初始 YDA = ${exactQuantity(row.splitFactor)} 个当前 YDA`;
+  }
 
   function barPriceFormatter(bar, previousClose) {
     const prices = [bar.low, bar.open, bar.close, bar.high, previousClose].filter(Number.isFinite).sort((a, b) => a - b);
@@ -77,6 +93,11 @@
     $('turnover-per-issued').textContent = issued > 0 ? chartNumber(turnover / issued, 4) : '—';
     $('turnover-per-issued').title = issued > 0 ? `${number(turnover / issued, 4)} HKD/YDA` : '';
     $('turnover-total').textContent = `累计成交额 ${compact(turnover)} HKD`;
+    $('current-supply').textContent = exactQuantity(latest.circulatingSupply);
+    const supplySource = latest.circulatingSupply === undefined ? '源表未提供流通量'
+      : latest.circulatingSupply === null ? '回购库存超过发行实售，流通量待核对'
+      : '发行方累计实售减去回购库存';
+    $('current-supply-unit').textContent = [supplyUnit(latest), supplySource].filter(Boolean).join(' · ');
     $('issuance-basis').textContent = state.data.meta?.issuanceDescription || '发行量按源表价格归集，实际成交量按真实成交价统计。';
   }
 
@@ -276,7 +297,9 @@
     const details = $('coefficient-details');
     details.hidden = !(path?.length > inlineHistoryLimit);
     $('coefficient-history').textContent = details.hidden ? '' : path.join(' → ');
-    $('daily-status').textContent = `${d.status || ''} · ${chartNumber(d.tradeCount, 0)} 笔`;
+    const closingDay = state.data.daily[d.endIndex];
+    const supplyDescription = closingDay.circulatingSupply == null ? '' : `期末流通量 ${exactQuantity(closingDay.circulatingSupply)} YDA`;
+    $('daily-status').textContent = [d.status, `${chartNumber(d.tradeCount, 0)} 笔`, supplyDescription, supplyUnit(closingDay)].filter(Boolean).join(' · ');
     if ($('data-table').open) {
       document.querySelectorAll('#table-body tr').forEach((row) => {
         const day = Number(row.dataset.dayIndex);
@@ -386,7 +409,7 @@
     state.page = Math.max(0, Math.min(state.page, totalPages - 1));
     const offset = start + state.page * pageSize;
     const rows = state.data.daily.slice(offset, Math.min(end + 1, offset + pageSize));
-    $('table-body').innerHTML = rows.map((d, i) => `<tr data-day-index="${offset + i}" class="${offset + i >= state.bars[state.selectedDay].startIndex && offset + i <= state.bars[state.selectedDay].endIndex ? 'selected' : ''}"><td><button class="table-date" type="button" aria-label="查看 ${escape(d.dateLabel)} 明细">${escape(d.dateLabel)}</button></td><td>${price(d.open)}</td><td>${price(d.high)}</td><td>${price(d.low)}</td><td>${price(d.close)}</td><td class="${trend(math.metrics(state.data.daily, offset + i).change)}">${percent(math.metrics(state.data.daily, offset + i).changePct)}</td><td>${number(d.volume, 8)}</td><td>${number(d.turnover, 8)}</td><td>${number(d.tradeCount, 0)}</td></tr>`).join('');
+    $('table-body').innerHTML = rows.map((d, i) => `<tr data-day-index="${offset + i}" class="${offset + i >= state.bars[state.selectedDay].startIndex && offset + i <= state.bars[state.selectedDay].endIndex ? 'selected' : ''}"><td><button class="table-date" type="button" aria-label="查看 ${escape(d.dateLabel)} 明细">${escape(d.dateLabel)}</button></td><td>${price(d.open)}</td><td>${price(d.high)}</td><td>${price(d.low)}</td><td>${price(d.close)}</td><td class="${trend(math.metrics(state.data.daily, offset + i).change)}">${percent(math.metrics(state.data.daily, offset + i).changePct)}</td><td>${number(d.volume, 8)}</td><td>${number(d.turnover, 8)}</td><td>${number(d.tradeCount, 0)}</td><td>${escape(exactQuantity(d.circulatingSupply))}</td><td>${escape(exactQuantity(d.splitFactor))}</td></tr>`).join('');
     $('table-count').textContent = `当前区间 ${number(end - start + 1, 0)} 天`;
     $('table-page').textContent = `${state.page + 1} / ${totalPages}`;
     $('table-prev').disabled = state.page === 0;
@@ -396,8 +419,12 @@
   function downloadCsv() {
     const [start, end] = rawDailyRange();
     const csvCell = (value) => `"${String(value).replace(/"/g, '""')}"`;
-    const rows = [['模拟日期', '开盘价(HK)', '最高价(HK)', '最低价(HK)', '收盘价(HK)', '前收盘价(HK)', '涨跌额(HK)', '涨跌幅(%)', '振幅(%)', '成交量(YDA)', '成交额(HK)', '成交笔数', '状态'],
-      ...state.data.daily.slice(start, end + 1).map((d, i) => { const m = math.metrics(state.data.daily, start + i); return [d.dateLabel, d.open, d.high, d.low, d.close, m.previousClose ?? '', m.change ?? '', m.changePct ?? '', m.amplitudePct ?? '', d.volume, d.turnover, d.tradeCount, d.status]; })];
+    const rows = [['模拟日期', '开盘价(HK)', '最高价(HK)', '最低价(HK)', '收盘价(HK)', '前收盘价(HK)', '涨跌额(HK)', '涨跌幅(%)', '振幅(%)', '成交量(YDA)', '成交额(HK)', '成交笔数', '状态', '期末流通量(YDA)', '累计拆分倍数'],
+      ...state.data.daily.slice(start, end + 1).map((d, i) => {
+        const m = math.metrics(state.data.daily, start + i);
+        return [d.dateLabel, d.open, d.high, d.low, d.close, m.previousClose ?? '', m.change ?? '', m.changePct ?? '',
+          m.amplitudePct ?? '', d.volume, d.turnover, d.tradeCount, d.status, d.circulatingSupply ?? '', d.splitFactor ?? ''];
+      })];
     const url = URL.createObjectURL(new Blob(['\uFEFF', rows.map((row) => row.map(csvCell).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a');
     link.href = url;
@@ -540,6 +567,25 @@
     $('dataset-detail').textContent = '读取失败，可选择其他文档或重试';
   }
 
+  async function readJson(url, options, label) {
+    const response = await fetch(url, options);
+    if (!response.ok) throw new Error(`${label}读取失败（${response.status}）。`);
+    return response.json();
+  }
+
+  async function readDataset(entry, signal) {
+    if (offlineCatalog) {
+      const embedded = $(`offline-${entry.id}`);
+      if (!embedded) throw new Error('本地 HTML 缺少这份行情数据。');
+      const compressed = Uint8Array.from(atob(embedded.textContent), char => char.charCodeAt(0));
+      const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream('gzip'), { signal });
+      return new Response(stream).json();
+    }
+    const url = new URL(`./data/${entry.dataFile}`, location.href);
+    url.searchParams.set('v', entry.dataSha256);
+    return readJson(url, { signal }, '行情数据');
+  }
+
   async function loadDataset(id) {
     const requestId = ++state.requestId;
     state.controller?.abort();
@@ -560,11 +606,7 @@
     $('data-coverage').textContent = '正在读取行情数据…';
     document.title = `${entry.title} · YDA 行情`;
     try {
-      const url = new URL(`./data/${entry.dataFile}`, location.href);
-      url.searchParams.set('v', entry.dataSha256);
-      const response = await fetch(url, { signal: state.controller.signal });
-      if (!response.ok) throw new Error(`行情数据读取失败（${response.status}）。`);
-      const data = await response.json();
+      const data = await readDataset(entry, state.controller.signal);
       if (requestId !== state.requestId) return;
       if (!data.prices?.length || !data.daily?.length) throw new Error('行情数据为空。');
       state.data = data;
@@ -590,7 +632,18 @@
   }
 
   function requestedDataset() {
+    if (offlineCatalog) {
+      const id = new URLSearchParams(location.hash.slice(1)).get('dataset');
+      if (id !== null) return id;
+    }
     return new URL(location.href).searchParams.get('dataset') ?? state.catalog.defaultId;
+  }
+
+  function datasetUrl(id) {
+    const url = new URL(location.href);
+    if (offlineCatalog) url.hash = new URLSearchParams({ dataset: id }).toString();
+    else url.searchParams.set('dataset', id);
+    return url;
   }
 
   async function loadCatalog() {
@@ -599,9 +652,8 @@
     $('dataset-loading').hidden = false;
     $('dataset-loading').textContent = '正在读取文档目录…';
     try {
-      const response = await fetch('./data/catalog.json', { cache: 'no-cache' });
-      if (!response.ok) throw new Error(`文档目录读取失败（${response.status}）。`);
-      const catalog = await response.json();
+      const catalog = offlineCatalog ? JSON.parse(offlineCatalog.textContent)
+        : await readJson('./data/catalog.json', { cache: 'no-cache' }, '文档目录');
       if (!catalog.datasets?.length || !catalog.datasets.some((entry) => entry.id === catalog.defaultId)) throw new Error('没有可显示的行情文档。');
       state.catalog = catalog;
       $('dataset-select').replaceChildren(...catalog.datasets.map((entry) => {
@@ -625,8 +677,7 @@
     bindControls();
     $('dataset-select').addEventListener('change', () => {
       const id = $('dataset-select').value;
-      const url = new URL(location.href);
-      url.searchParams.set('dataset', id);
+      const url = datasetUrl(id);
       history.pushState({ dataset: id }, '', url);
       loadDataset(id);
     });
@@ -636,8 +687,7 @@
       if (!state.dataset) return;
       const id = state.dataset.id;
       const requestId = state.requestId;
-      const url = new URL(location.href);
-      url.searchParams.set('dataset', id);
+      const url = datasetUrl(id);
       try {
         await navigator.clipboard.writeText(url.href);
         if (state.requestId !== requestId) return;

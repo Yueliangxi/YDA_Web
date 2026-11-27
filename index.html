@@ -44,6 +44,11 @@
         <article class="summary-card"><p>累计成交量 <span class="tiny-label">全部日期</span></p><div class="metric"><strong id="total-volume">—</strong><span>YDA</span></div><div class="metric-note" id="day-count"></div></article>
         <article class="summary-card"><p>累计发行量 <span class="tiny-label">全部价格</span></p><div class="metric"><strong id="total-issued">—</strong><span>YDA</span></div><div class="metric-note" id="price-count"></div></article>
         <article class="summary-card"><p>成交额 / 发行量</p><div class="metric"><strong id="turnover-per-issued">—</strong><span>HKD/YDA</span></div><div class="metric-note" id="turnover-total"></div></article>
+        <article class="summary-card supply-summary">
+          <p>当前流通量</p>
+          <div class="metric"><strong id="current-supply">—</strong><span>YDA</span></div>
+          <div class="metric-note" id="current-supply-unit"></div>
+        </article>
       </section>
 
       <section class="chart-card" id="distribution" aria-labelledby="distribution-title">
@@ -87,7 +92,7 @@
         <div class="card-note"><span>涨跌幅 =（本根收盘 − 前收）÷ 前收；振幅 =（最高 − 最低）÷ 前收。无前收时显示 —。<br>阳线 / 阴线按本根收盘与开盘比较。周 K 从模拟起点每 7 天汇总；月 / 年沿用 Excel 模拟日历，末根可未满周期。</span><span class="gesture-hint">悬停 / 点击查看 · 双指缩放<br>拖动平移 · 底部滑块选择区间</span></div>
       </section>
 
-      <details class="data-table-section" id="data-table"><summary><span>每日数据表 <small>精确数值，按当前图表区间显示</small></span><span class="details-icon" aria-hidden="true">+</span></summary><div class="table-toolbar"><span id="table-count"></span><button id="download-csv" type="button">下载当前区间 CSV ↓</button></div><div class="table-scroll" tabindex="0" role="region" aria-label="可横向滚动的每日数据表"><table><thead><tr><th scope="col">模拟日期</th><th scope="col">开盘 / HK</th><th scope="col">最高 / HK</th><th scope="col">最低 / HK</th><th scope="col">收盘 / HK</th><th scope="col">日涨跌幅</th><th scope="col">成交量 / YDA</th><th scope="col">成交额 / HK</th><th scope="col">成交笔数</th></tr></thead><tbody id="table-body"></tbody></table></div><div class="table-pagination"><button type="button" id="table-prev">上一页</button><span id="table-page"></span><button type="button" id="table-next">下一页</button></div></details>
+      <details class="data-table-section" id="data-table"><summary><span>每日数据表 <small>精确数值，按当前图表区间显示</small></span><span class="details-icon" aria-hidden="true">+</span></summary><div class="table-toolbar"><span id="table-count"></span><button id="download-csv" type="button">下载当前区间 CSV ↓</button></div><div class="table-scroll" tabindex="0" role="region" aria-label="可横向滚动的每日数据表"><table><thead><tr><th scope="col">模拟日期</th><th scope="col">开盘 / HK</th><th scope="col">最高 / HK</th><th scope="col">最低 / HK</th><th scope="col">收盘 / HK</th><th scope="col">日涨跌幅</th><th scope="col">成交量 / YDA</th><th scope="col">成交额 / HK</th><th scope="col">成交笔数</th><th scope="col">期末流通量 / YDA</th><th scope="col">累计拆分倍数</th></tr></thead><tbody id="table-body"></tbody></table></div><div class="table-pagination"><button type="button" id="table-prev">上一页</button><span id="table-page"></span><button type="button" id="table-next">下一页</button></div></details>
       <footer><div><b>YDA</b><span>价格以 HK 计 · 数量以 YDA 计</span></div><span id="source-file">数据来源：—</span></footer>
     </div>
   </main>
